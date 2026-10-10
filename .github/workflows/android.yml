@@ -1,0 +1,40 @@
+name: Android
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Testes dos cálculos
+        run: ./gradlew :core:test --stacktrace
+
+      - name: APK de debug
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: App bundle de release (sem assinatura)
+        run: ./gradlew :app:bundleRelease --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meta-leve-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meta-leve-release-aab
+          path: app/build/outputs/bundle/release/*.aab
