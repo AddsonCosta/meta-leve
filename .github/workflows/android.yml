@@ -10,6 +10,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    env:
+      KEYSTORE_BASE64: ${{ secrets.METALEVE_KEYSTORE_BASE64 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -26,7 +28,17 @@ jobs:
       - name: APK de debug
         run: ./gradlew :app:assembleDebug --stacktrace
 
-      - name: App bundle de release (sem assinatura)
+      - name: Chave de upload (se configurada)
+        if: env.KEYSTORE_BASE64 != ''
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          echo "METALEVE_KEYSTORE=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+
+      - name: App bundle de release
+        env:
+          METALEVE_KEYSTORE_PASSWORD: ${{ secrets.METALEVE_KEYSTORE_PASSWORD }}
+          METALEVE_KEY_ALIAS: ${{ secrets.METALEVE_KEY_ALIAS }}
+          METALEVE_KEY_PASSWORD: ${{ secrets.METALEVE_KEY_PASSWORD }}
         run: ./gradlew :app:bundleRelease --stacktrace
 
       - uses: actions/upload-artifact@v4

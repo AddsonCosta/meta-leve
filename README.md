@@ -45,4 +45,4 @@ Para assinar o release, defina `METALEVE_KEYSTORE`, `METALEVE_KEYSTORE_PASSWORD`
 `METALEVE_KEY_PASSWORD`.
 
 ## Créditos
-Ver [NOTICE.md](NOTICE.md). O Meta Leve não substitui orientação médica ou de nutricionista.
+Ver [NOTICE.md](NOTICE.md). Para publicar, siga [docs/publicacao.md](docs/publicacao.md). O Meta Leve não substitui orientação médica ou de nutricionista.
