@@ -31,7 +31,7 @@ Com os secrets criados, o build do GitHub Actions passa a gerar o AAB assinado (
 ## 4. Criar o app e enviar
 1. Na Play Console: **Criar app**, nome "Evolui", app gratuito.
 2. Preencha a página da loja com os textos de `docs/loja.md`.
-3. Em **Política de privacidade**, use o link do arquivo `docs/privacidade.md` (depois de trocar o e-mail de contato).
+3. Em **Política de privacidade**, use o link do arquivo `docs/privacidade.md`.
 4. Responda os formulários: segurança dos dados, classificação de conteúdo, público-alvo e app de saúde.
 5. Em **Testes > Teste interno**, crie uma versão e envie o `.aab` baixado do GitHub Actions.
 6. Adicione seu e-mail como testador e abra o link de participação no celular. O app instala pela própria Play Store.

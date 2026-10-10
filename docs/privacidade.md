@@ -28,4 +28,4 @@ As informações do Evolui são estimativas e não substituem orientação médi
 O aplicativo não é destinado a menores de 13 anos.
 
 ## Contato
-Dúvidas sobre esta política: [E-MAIL DE CONTATO]
+Dúvidas sobre esta política: mensageiro3001@yahoo.com.br
