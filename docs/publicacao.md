@@ -1,4 +1,4 @@
-# Como publicar o Meta Leve na Play Store
+# Como publicar o Evolui na Play Store
 
 ## 1. Conta de desenvolvedor
 1. Acesse https://play.google.com/console e crie a conta (pessoal). A taxa é de US$ 25, paga uma vez.
@@ -21,15 +21,15 @@ Em GitHub > meta-leve > Settings > Secrets and variables > Actions, crie:
 
 | Secret | Valor |
 |---|---|
-| `METALEVE_KEYSTORE_BASE64` | conteúdo de `base64 -w0 upload.jks` (no Mac: `base64 -i upload.jks`) |
-| `METALEVE_KEYSTORE_PASSWORD` | senha do keystore |
-| `METALEVE_KEY_ALIAS` | `upload` |
-| `METALEVE_KEY_PASSWORD` | senha da chave |
+| `EVOLUI_KEYSTORE_BASE64` | conteúdo de `base64 -w0 upload.jks` (no Mac: `base64 -i upload.jks`) |
+| `EVOLUI_KEYSTORE_PASSWORD` | senha do keystore |
+| `EVOLUI_KEY_ALIAS` | `upload` |
+| `EVOLUI_KEY_PASSWORD` | senha da chave |
 
-Com os secrets criados, o build do GitHub Actions passa a gerar o AAB assinado (artefato `meta-leve-release-aab`).
+Com os secrets criados, o build do GitHub Actions passa a gerar o AAB assinado (artefato `evolui-release-aab`).
 
 ## 4. Criar o app e enviar
-1. Na Play Console: **Criar app**, nome "Meta Leve", app gratuito.
+1. Na Play Console: **Criar app**, nome "Evolui", app gratuito.
 2. Preencha a página da loja com os textos de `docs/loja.md`.
 3. Em **Política de privacidade**, use o link do arquivo `docs/privacidade.md` (depois de trocar o e-mail de contato).
 4. Responda os formulários: segurança dos dados, classificação de conteúdo, público-alvo e app de saúde.

@@ -1,4 +1,4 @@
-# Meta Leve
+# Evolui
 
 App Android para controle de peso e dieta: registre o que come e os exercícios que faz, acompanhe o peso
 e veja, a cada dia, quanto ainda pode consumir para chegar à sua meta.
@@ -41,8 +41,8 @@ Requer JDK 17 e Android SDK (API 36).
 ```
 
 O GitHub Actions compila o APK e o AAB a cada push; os arquivos ficam nos artefatos da execução.
-Para assinar o release, defina `METALEVE_KEYSTORE`, `METALEVE_KEYSTORE_PASSWORD`, `METALEVE_KEY_ALIAS` e
-`METALEVE_KEY_PASSWORD`.
+Para assinar o release, defina `EVOLUI_KEYSTORE`, `EVOLUI_KEYSTORE_PASSWORD`, `EVOLUI_KEY_ALIAS` e
+`EVOLUI_KEY_PASSWORD`.
 
 ## Créditos
-Ver [NOTICE.md](NOTICE.md). Para publicar, siga [docs/publicacao.md](docs/publicacao.md). O Meta Leve não substitui orientação médica ou de nutricionista.
+Ver [NOTICE.md](NOTICE.md). Para publicar, siga [docs/publicacao.md](docs/publicacao.md). O Evolui não substitui orientação médica ou de nutricionista.

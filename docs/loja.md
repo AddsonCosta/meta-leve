@@ -1,13 +1,13 @@
 # Página na Play Store
 
-**Nome do app** (até 30 caracteres): Meta Leve: Dieta e Peso
+**Nome do app** (até 30 caracteres): Evolui: Saúde, Dieta e Peso
 
 **Descrição curta** (até 80 caracteres):
 Conte calorias com a tabela TACO, registre exercícios e acompanhe seu peso.
 
 **Descrição completa:**
 
-O Meta Leve ajuda você a perder, manter ou ganhar peso com um objetivo claro: todo dia você sabe quanto ainda pode comer para chegar à sua meta.
+O Evolui ajuda você a perder, manter ou ganhar peso com um objetivo claro: todo dia você sabe quanto ainda pode comer para chegar à sua meta.
 
 COMO FUNCIONA
 • Informe idade, altura, peso, nível de atividade e o peso que você quer alcançar.
@@ -31,7 +31,7 @@ PRIVACIDADE
 • Sem cadastro, sem anúncios e sem internet: seus dados ficam só no seu celular.
 • Backup e restauração em arquivo.
 
-O Meta Leve não substitui orientação médica ou de nutricionista.
+O Evolui não substitui orientação médica ou de nutricionista.
 
 **Categoria:** Saúde e fitness
 **Classificação de conteúdo:** Livre (sem conteúdo sensível)

@@ -13,7 +13,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MetaLeve"
+rootProject.name = "Evolui"
 
 include(":core")
 include(":app")

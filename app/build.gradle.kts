@@ -9,11 +9,11 @@ plugins {
 }
 
 android {
-    namespace = "app.metaleve"
+    namespace = "com.addsoncosta.evolui"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "app.metaleve"
+        applicationId = "com.addsoncosta.evolui"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -21,14 +21,14 @@ android {
     }
 
     // Assinatura de release opcional, lida de variáveis de ambiente (CI).
-    val keystorePath = System.getenv("METALEVE_KEYSTORE")
+    val keystorePath = System.getenv("EVOLUI_KEYSTORE")
     signingConfigs {
         if (keystorePath != null) {
             create("release") {
                 storeFile = file(keystorePath)
-                storePassword = System.getenv("METALEVE_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("METALEVE_KEY_ALIAS")
-                keyPassword = System.getenv("METALEVE_KEY_PASSWORD")
+                storePassword = System.getenv("EVOLUI_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("EVOLUI_KEY_ALIAS")
+                keyPassword = System.getenv("EVOLUI_KEY_PASSWORD")
             }
         }
     }
