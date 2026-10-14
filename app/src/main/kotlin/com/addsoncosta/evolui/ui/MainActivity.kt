@@ -7,6 +7,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -25,7 +27,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             EvoluiTheme {
-                Root()
+                // Fundo do tema por baixo de tudo, para o texto não sumir no modo escuro.
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    Root()
+                }
             }
         }
     }
