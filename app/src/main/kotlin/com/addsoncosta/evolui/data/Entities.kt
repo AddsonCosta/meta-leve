@@ -136,6 +136,28 @@ data class WorkoutEntity(
     val name: String,
     val minutes: Double,
     val kcal: Double,
+    /** Id do registro no Health Connect, para não importar o mesmo treino duas vezes. */
+    val externalId: String? = null,
+)
+
+/** Um jejum. Sem [endMillis] significa que está em andamento. */
+@Serializable
+@Entity(tableName = "fast")
+data class FastEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val startMillis: Long,
+    val endMillis: Long? = null,
+    val targetHours: Int,
+)
+
+/** Foto de progresso guardada na pasta interna do app. */
+@Serializable
+@Entity(tableName = "photo", indices = [Index("epochDay")])
+data class PhotoEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val epochDay: Long,
+    val fileName: String,
+    val weightKg: Double? = null,
 )
 
 data class DayTotal(val epochDay: Long, val total: Double)

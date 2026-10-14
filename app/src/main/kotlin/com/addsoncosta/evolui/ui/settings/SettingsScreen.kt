@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -16,7 +17,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,7 +51,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(onBack: () -> Unit) {
     val container = appContainer()
     val repo = container.repository
     val context = LocalContext.current
@@ -71,17 +76,20 @@ fun SettingsScreen() {
     val p = profile ?: return Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
 
     if (editing) {
-        BackHandler { editing = false }
-        OnboardingScreen(initial = p, onDone = { editing = false })
+        OnboardingScreen(initial = p, onDone = { editing = false }, onCancel = { editing = false })
         return
     }
+    BackHandler(onBack = onBack)
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Perfil", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Card(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar") }
+            Text("Perfil e ajustes", style = MaterialTheme.typography.headlineSmall)
+        }
+        Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(p.name, style = MaterialTheme.typography.titleMedium)
                 Text("${EnergyCalculator.ageOn(p.birthDate, LocalDate.now())} anos · ${p.heightCm.fmt()} cm")
@@ -97,6 +105,8 @@ fun SettingsScreen() {
             }
         }
         Button(onClick = { editing = true }, modifier = Modifier.fillMaxWidth()) { Text("Editar perfil e meta") }
+
+        HealthCard()
 
         Text("Backup", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Text("Salve seus dados num arquivo para guardar ou levar para outro aparelho.", style = MaterialTheme.typography.bodySmall)

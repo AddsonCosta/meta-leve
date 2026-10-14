@@ -10,15 +10,20 @@ import com.addsoncosta.evolui.core.Profile
 import com.addsoncosta.evolui.data.DayLogEntity
 import com.addsoncosta.evolui.data.MealEntity
 import com.addsoncosta.evolui.data.WorkoutEntity
+import com.addsoncosta.evolui.health.HealthDay
 import java.time.LocalDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class TodayState(
     val date: LocalDate,
@@ -62,6 +67,32 @@ class TodayViewModel(private val container: AppContainer) : ViewModel() {
             summary = EnergyCalculator.summary(profile, d, weight, activity, data.meals.sumOf { it.kcal }, data.workouts.sumOf { it.kcal }),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Dados do Samsung Health (via Health Connect) do dia; nulo se não estiver conectado. */
+    val health = MutableStateFlow<HealthDay?>(null)
+    private val syncLock = Mutex()
+
+    init {
+        viewModelScope.launch { date.collect { syncHealth() } }
+    }
+
+    /** Lê o dia no Health Connect, importa os treinos novos e o peso, se o dia ainda não tiver um. */
+    fun syncHealth() = viewModelScope.launch {
+        syncLock.withLock {
+            val hc = container.health
+            if (!hc.hasPermissions()) {
+                health.value = null
+                return@withLock
+            }
+            val d = date.value
+            val weight = state.value?.weightKg ?: repo.profile.first()?.startWeightKg ?: 70.0
+            val day = runCatching { hc.readDay(d, weight) }.getOrNull() ?: return@withLock
+            health.value = day
+            repo.importWorkouts(day.workouts)
+            val w = day.latestWeightKg
+            if (w != null && w in 25.0..400.0 && repo.dayLogOnce(d)?.weightKg == null) repo.updateDay(d) { it.copy(weightKg = w) }
+        }
+    }
 
     fun shiftDay(days: Long) {
         val next = date.value.plusDays(days)

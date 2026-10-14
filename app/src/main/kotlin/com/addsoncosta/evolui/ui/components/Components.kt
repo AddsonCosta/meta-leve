@@ -1,10 +1,17 @@
 package com.addsoncosta.evolui.ui.components
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -26,7 +33,9 @@ import java.util.Locale
 
 val PtBr: Locale = Locale.forLanguageTag("pt-BR")
 val DateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy", PtBr)
+val ShortDateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM", PtBr)
 val DayFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE, d 'de' MMM", PtBr)
+val TimeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", PtBr)
 
 fun Double.fmt(decimals: Int = 0): String = NumberFormat.getNumberInstance(PtBr).apply {
     maximumFractionDigits = decimals
@@ -36,6 +45,10 @@ fun Double.fmt(decimals: Int = 0): String = NumberFormat.getNumberInstance(PtBr)
 /** Converte texto digitado com vírgula ou ponto. */
 fun String.toDecimal(): Double? = trim().replace(',', '.').toDoubleOrNull()
 
+/**
+ * Campo numérico. [help] aparece embaixo da caixa (ex.: um exemplo de preenchimento);
+ * [error], quando presente, substitui a ajuda em vermelho.
+ */
 @Composable
 fun NumberField(
     value: String,
@@ -44,48 +57,97 @@ fun NumberField(
     modifier: Modifier = Modifier,
     suffix: String? = null,
     decimal: Boolean = true,
+    help: String? = null,
+    error: String? = null,
 ) {
+    val invalid = error != null || (value.isNotEmpty() && value.toDecimal() == null)
+    val below = error ?: help
     OutlinedTextField(
         value = value,
         onValueChange = { new -> if (new.all { it.isDigit() || (decimal && (it == ',' || it == '.')) }) onValueChange(new) },
         label = { Text(label) },
         suffix = if (suffix != null) { { Text(suffix) } } else null,
+        supportingText = if (below != null) { { Text(below) } } else null,
         singleLine = true,
-        isError = value.isNotEmpty() && value.toDecimal() == null,
+        isError = invalid,
         keyboardOptions = KeyboardOptions(keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number),
         modifier = modifier,
     )
 }
 
-/** Medidor semicircular do índice de desempenho (0 a 150%). */
+/** Cartão escuro arredondado usado em todas as telas. */
 @Composable
-fun PerformanceGauge(percent: Double, size: Dp = 180.dp) {
-    val track = MaterialTheme.colorScheme.surfaceVariant
-    val color = when {
-        percent in 85.0..115.0 -> Color(0xFF2E9E5B)
-        percent in 60.0..140.0 -> Color(0xFFF2A541)
-        else -> Color(0xFFD9534F)
+fun Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
     }
-    Box(contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(size, size / 2 + 16.dp)) {
-            val stroke = 18.dp.toPx()
-            val diameter = this.size.width - stroke
-            val topLeft = Offset(stroke / 2, stroke / 2)
-            val arcSize = Size(diameter, diameter)
-            drawArc(track, 180f, 180f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
-            val sweep = (percent.coerceIn(0.0, 150.0) / 150.0 * 180).toFloat()
-            drawArc(color, 180f, sweep, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
-            // Marca dos 100%.
-            val angle = Math.toRadians(180.0 + 120.0)
-            val r = diameter / 2
-            val center = Offset(topLeft.x + r, topLeft.y + r)
-            val inner = Offset(center.x + ((r - stroke) * Math.cos(angle)).toFloat(), center.y + ((r - stroke) * Math.sin(angle)).toFloat())
-            val outer = Offset(center.x + ((r + stroke) * Math.cos(angle)).toFloat(), center.y + ((r + stroke) * Math.sin(angle)).toFloat())
-            drawLine(Color.Gray, inner, outer, strokeWidth = 2.dp.toPx())
+}
+
+/** Título de seção em caixa alta, discreto. */
+@Composable
+fun Overline(text: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
+    Text(text.uppercase(PtBr), modifier = modifier, style = MaterialTheme.typography.labelMedium, color = color, fontWeight = FontWeight.Bold)
+}
+
+/** Anel de progresso (0 a 1), com o conteúdo no centro. Passa de 1 desenhando a volta extra em cor de alerta. */
+@Composable
+fun Ring(
+    progress: Float,
+    color: Color,
+    modifier: Modifier = Modifier,
+    size: Dp = 200.dp,
+    stroke: Dp = 18.dp,
+    overColor: Color = MaterialTheme.colorScheme.error,
+    content: @Composable () -> Unit = {},
+) {
+    val track = color.copy(alpha = 0.16f)
+    Box(modifier.size(size), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.size(size)) {
+            val s = stroke.toPx()
+            val d = this.size.minDimension - s
+            val topLeft = Offset(s / 2, s / 2)
+            val arc = Size(d, d)
+            drawArc(track, 0f, 360f, false, topLeft, arc, style = Stroke(s))
+            val p = progress.coerceAtLeast(0f)
+            drawArc(color, -90f, 360f * p.coerceAtMost(1f), false, topLeft, arc, style = Stroke(s, cap = StrokeCap.Round))
+            if (p > 1f) {
+                drawArc(overColor, -90f, 360f * (p - 1f).coerceAtMost(1f), false, topLeft, arc, style = Stroke(s, cap = StrokeCap.Round))
+            }
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.BottomCenter)) {
-            Text("${percent.fmt()}%", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("da meta do dia", style = MaterialTheme.typography.bodySmall)
+        content()
+    }
+}
+
+/** Anel pequeno com rótulo embaixo, para macronutrientes e afins. */
+@Composable
+fun MiniRing(label: String, value: String, progress: Float, color: Color, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Ring(progress, color, size = 76.dp, stroke = 8.dp) {
+            Text("${(progress * 100).toDouble().fmt()}%", style = MaterialTheme.typography.labelLarge)
         }
+        Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        Text(value, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** Número grande com legenda, para linhas de estatísticas. */
+@Composable
+fun Stat(value: String, label: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurface) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, style = MaterialTheme.typography.titleLarge, color = color)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** Linha com rótulo à esquerda e valor à direita. */
+@Composable
+fun KeyValue(key: String, value: String) {
+    Row(Modifier.fillMaxWidth()) {
+        Text(key, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, fontWeight = FontWeight.Bold)
     }
 }
