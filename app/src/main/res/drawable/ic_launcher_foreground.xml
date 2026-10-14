@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Folha estilizada com uma seta descendente: leveza e progresso. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,30 C70,34 78,46 76,62 C74,74 64,80 54,80 C44,80 34,74 32,62 C30,46 38,34 54,30 Z" />
+    <path
+        android:fillColor="#2E7D5B"
+        android:pathData="M52,40 L56,40 L56,62 L63,55 L66,58 L54,70 L42,58 L45,55 L52,62 Z" />
+</vector>
