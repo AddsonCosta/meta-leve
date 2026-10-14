@@ -172,7 +172,7 @@ object HealthReports {
     private fun build(d: Data, area: ReportArea): Report {
         val sections: List<Section> = when (area) {
             ReportArea.GERAL -> general(d)
-            ReportArea.ANAMNESE -> listOf(anamnesis(d)) + history(d, HealthType.ANAMNESE, includeEmpty = false)
+            ReportArea.ANAMNESE -> listOf(anamnesis(d))
             ReportArea.CALENDARIO -> calendar(d)
             ReportArea.CICLO -> listOf(cycle(d))
             ReportArea.ODONTOLOGIA -> listOf(teeth(d, onlyProblems = false)) + history(d, HealthType.ODONTOLOGIA)
@@ -269,9 +269,20 @@ object HealthReports {
     }
 
     private fun anamnesis(d: Data): Section {
-        if (d.conditions.isEmpty()) return Section("Anamnese", listOf(Para("Nenhuma doença ou condição registrada.", muted = true)))
-        val groups = listOf("ATUAL" to "Condições atuais", "PRE_EXISTENTE" to "Doenças pré-existentes", "TRATADA" to "Já tratadas")
         val items = mutableListOf<Item>()
+        // Formulário da anamnese: a descrição já vem com "Rótulo: valor" em cada linha.
+        d.of(HealthType.ANAMNESE).firstOrNull()?.description?.takeIf { it.isNotBlank() }?.let { text ->
+            items += Sub("Formulário")
+            text.lines().filter { it.isNotBlank() }.forEach { line ->
+                val i = line.indexOf(": ")
+                items += if (i > 0) KV(line.substring(0, i), line.substring(i + 2)) else Para(line)
+            }
+        }
+        if (d.conditions.isEmpty()) {
+            items += Para("Nenhuma doença ou condição registrada.", muted = true)
+            return Section("Anamnese", items)
+        }
+        val groups = listOf("ATUAL" to "Condições atuais", "PRE_EXISTENTE" to "Doenças pré-existentes", "TRATADA" to "Já tratadas")
         groups.forEach { (key, label) ->
             val list = d.conditions.filter { it.status == key }.sortedBy { it.name }
             if (list.isNotEmpty()) {
@@ -310,8 +321,10 @@ object HealthReports {
         return s.isBlank() || listOf("saudavel", "higido", "normal", "ok", "healthy", "sadio", "sem alteracao").any { s == it || s.startsWith(it) }
     }
 
-    private fun pretty(s: String): String =
-        if (s == s.uppercase()) s.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() } else s
+    private val accents = mapOf("CARIE" to "Cárie", "PROTESE" to "Prótese", "SAUDAVEL" to "Saudável", "MEDIO" to "Médio")
+
+    private fun pretty(s: String): String = accents[s]
+        ?: if (s == s.uppercase()) s.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() } else s
 
     private fun teeth(d: Data, onlyProblems: Boolean): Section {
         val list = d.teeth.filter { !onlyProblems || !healthyTooth(it.status) || !it.notes.isNullOrBlank() }.sortedBy { it.number }
@@ -383,7 +396,7 @@ object HealthReports {
         r.professional?.takeIf { it.isNotBlank() }?.let { items += KV(spec?.professionalLabel ?: "Profissional", it) }
         r.place?.takeIf { it.isNotBlank() }?.let { items += KV(spec?.placeLabel?.removeSuffix(" *") ?: "Local", it) }
         r.status?.takeIf { it.isNotBlank() }?.let { items += KV("Situação", it) }
-        HealthRepository.decodeExtra(r.extra).forEach { (k, v) ->
+        if (type != HealthType.ANAMNESE) HealthRepository.decodeExtra(r.extra).forEach { (k, v) ->
             val value = if (HealthFields.kind(type, k) == FieldKind.DATE) HealthRepository.parseDate(v)?.format(Br) ?: v else v
             items += KV(HealthFields.label(type, k), value)
         }

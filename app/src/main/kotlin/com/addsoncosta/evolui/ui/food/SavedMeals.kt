@@ -47,6 +47,7 @@ import com.addsoncosta.evolui.data.FoodRepository
 import com.addsoncosta.evolui.data.MealEntity
 import com.addsoncosta.evolui.data.MealType
 import com.addsoncosta.evolui.data.PortionChoice
+import com.addsoncosta.evolui.data.Portions
 import com.addsoncosta.evolui.data.Repository
 import com.addsoncosta.evolui.data.SavedMeal
 import com.addsoncosta.evolui.data.SavedMealItemEntity
@@ -55,7 +56,6 @@ import com.addsoncosta.evolui.ui.components.Overline
 import com.addsoncosta.evolui.ui.components.Panel
 import com.addsoncosta.evolui.ui.components.fmt
 import com.addsoncosta.evolui.ui.components.toDecimal
-import com.addsoncosta.evolui.data.Portions
 
 /** Refeição salva sendo criada ou editada (só vai para o banco ao tocar em Salvar). */
 data class SavedMealDraft(
@@ -119,7 +119,7 @@ internal fun SavedMealsPanel(
                             color = MaterialTheme.colorScheme.primary,
                         )
                         Text(
-                            meal.items.joinToString(", ") { it.name.substringBefore(",") }.ifEmpty { "Sem itens" },
+                            meal.items.joinToString(" + ") { it.name }.ifEmpty { "Sem itens" },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 2,
@@ -316,21 +316,18 @@ internal fun SavedMealEditor(
         }
     }
 
-    editIndex?.let { index ->
-        val item = draft.items.getOrNull(index)
-        if (item == null) {
-            editIndex = null
-        } else {
-            EditItemDialog(
-                item = item,
-                foods = foods,
-                onDismiss = { editIndex = null },
-                onSave = { updated ->
-                    onChange(draft.copy(items = draft.items.mapIndexed { i, old -> if (i == index) updated else old }))
-                    editIndex = null
-                },
-            )
-        }
+    val index = editIndex
+    val editing = index?.let { draft.items.getOrNull(it) }
+    if (index != null && editing != null) {
+        EditItemDialog(
+            item = editing,
+            foods = foods,
+            onDismiss = { editIndex = null },
+            onSave = { updated ->
+                onChange(draft.copy(items = draft.items.mapIndexed { i, old -> if (i == index) updated else old }))
+                editIndex = null
+            },
+        )
     }
     if (confirmDelete) {
         AlertDialog(
