@@ -27,6 +27,14 @@ interface HealthEventDao {
     @Insert
     suspend fun insertAll(events: List<HealthEventEntity>)
 
+    /** Insere vários eventos novos e devolve os ids criados (para agendar lembretes). */
+    @Insert
+    suspend fun insertMany(events: List<HealthEventEntity>): List<Long>
+
+    /** Eventos com lembrete ainda não feitos, a partir de [fromDay]. */
+    @Query("SELECT * FROM health_event WHERE done = 0 AND remindMinutesBefore IS NOT NULL AND epochDay >= :fromDay")
+    suspend fun pendingReminders(fromDay: Long): List<HealthEventEntity>
+
     @Delete
     suspend fun delete(event: HealthEventEntity)
 
