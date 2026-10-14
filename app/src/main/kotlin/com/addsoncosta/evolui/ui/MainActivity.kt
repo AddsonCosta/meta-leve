@@ -1,7 +1,10 @@
 package com.addsoncosta.evolui.ui
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
@@ -24,10 +27,17 @@ import com.addsoncosta.evolui.ui.theme.EvoluiTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Pedido do Health Connect para mostrar a política de privacidade.
+        if (intent?.action in PrivacyActions) {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_URL)))
+            finish()
+            return
+        }
+        val bars = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
         setContent {
             EvoluiTheme {
-                // Fundo do tema por baixo de tudo, para o texto não sumir no modo escuro.
+                // Fundo do tema por baixo de tudo, para o texto nunca ficar sem contraste.
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     Root()
                 }
@@ -35,6 +45,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+private const val PRIVACY_URL = "https://github.com/AddsonCosta/meta-leve/blob/main/docs/privacidade.md"
+private val PrivacyActions = setOf("androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE", "android.intent.action.VIEW_PERMISSION_USAGE")
 
 @Composable
 fun appContainer(): AppContainer = (LocalContext.current.applicationContext as EvoluiApp).container

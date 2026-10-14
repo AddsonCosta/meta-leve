@@ -167,6 +167,51 @@ interface WorkoutDao {
     @Delete
     suspend fun delete(workout: WorkoutEntity)
 
+    @Query("SELECT externalId FROM workout WHERE externalId IS NOT NULL")
+    suspend fun externalIds(): List<String>
+
     @Query("DELETE FROM workout")
+    suspend fun clear()
+}
+
+@Dao
+interface FastDao {
+    @Query("SELECT * FROM fast ORDER BY startMillis DESC")
+    fun observeAll(): Flow<List<FastEntity>>
+
+    @Query("SELECT * FROM fast")
+    suspend fun all(): List<FastEntity>
+
+    @Upsert
+    suspend fun save(fast: FastEntity)
+
+    @Insert
+    suspend fun insertAll(fasts: List<FastEntity>)
+
+    @Delete
+    suspend fun delete(fast: FastEntity)
+
+    @Query("DELETE FROM fast")
+    suspend fun clear()
+}
+
+@Dao
+interface PhotoDao {
+    @Query("SELECT * FROM photo ORDER BY epochDay, id")
+    fun observeAll(): Flow<List<PhotoEntity>>
+
+    @Query("SELECT * FROM photo")
+    suspend fun all(): List<PhotoEntity>
+
+    @Insert
+    suspend fun insert(photo: PhotoEntity)
+
+    @Insert
+    suspend fun insertAll(photos: List<PhotoEntity>)
+
+    @Delete
+    suspend fun delete(photo: PhotoEntity)
+
+    @Query("DELETE FROM photo")
     suspend fun clear()
 }

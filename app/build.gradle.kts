@@ -17,7 +17,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 2
-        versionName = "0.1.1"
+        versionName = "0.2.0"
     }
 
     // Assinatura de release opcional, lida de variáveis de ambiente (CI).
@@ -83,6 +83,7 @@ dependencies {
     ksp(libs.room.compiler)
 
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.health.connect)
 
     testImplementation(libs.junit)
 }
