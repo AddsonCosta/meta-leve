@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
+    <!-- Imagens, textos e PDFs gerados para compartilhar. -->
     <cache-path name="share" path="share/" />
+    <!-- Anexos da seção Saúde (para abrir ou enviar o arquivo original). -->
+    <files-path name="anexos" path="anexos/" />
 </paths>

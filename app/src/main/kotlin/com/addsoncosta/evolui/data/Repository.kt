@@ -186,6 +186,9 @@ class Repository(private val context: Context, private val db: AppDatabase) {
             }
             db.exerciseDao().insertAll(exercises)
         }
+        // Correções e itens novos para quem já tinha o app instalado.
+        FoodSeed.upgrade(context, db)
+        ExerciseSeed.upgrade(context, db)
     }
 
     suspend fun exportBackup(): String = withContext(Dispatchers.IO) {

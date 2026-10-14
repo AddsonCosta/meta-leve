@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Settings
@@ -93,7 +94,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun ProgressScreen(onOpenProfile: () -> Unit) {
+fun ProgressScreen(onBack: () -> Unit) {
     val container = appContainer()
     val repo = container.repository
     val context = LocalContext.current
@@ -124,7 +125,7 @@ fun ProgressScreen(onOpenProfile: () -> Unit) {
                     Text("Progresso", style = MaterialTheme.typography.headlineMedium)
                 }
                 IconButton(onClick = { sharing = true }) { Icon(Icons.Filled.Share, "Compartilhar") }
-                IconButton(onClick = onOpenProfile) { Icon(Icons.Filled.Settings, "Perfil e ajustes") }
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar") }
             }
         }
 

@@ -50,3 +50,9 @@ jobs:
         with:
           name: evolui-release-aab
           path: app/build/outputs/bundle/release/*.aab
+
+      # Esquema do banco gerado pelo Room, para conferir as migrações.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: room-schemas
+          path: app/schemas

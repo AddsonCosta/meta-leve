@@ -52,129 +52,6 @@ interface DayLogDao {
 }
 
 @Dao
-interface FoodDao {
-    @Query("SELECT COUNT(*) FROM food")
-    suspend fun count(): Int
-
-    @Query(
-        "SELECT * FROM food WHERE searchName LIKE '%' || :query || '%' " +
-            "ORDER BY favorite DESC, (searchName LIKE :query || '%') DESC, name LIMIT 150"
-    )
-    fun search(query: String): Flow<List<FoodEntity>>
-
-    @Query("SELECT * FROM food WHERE favorite = 1 ORDER BY name")
-    fun observeFavorites(): Flow<List<FoodEntity>>
-
-    @Query("SELECT * FROM food WHERE id = :id")
-    suspend fun get(id: Long): FoodEntity?
-
-    @Query("SELECT * FROM food WHERE custom = 1")
-    suspend fun customFoods(): List<FoodEntity>
-
-    @Query("SELECT tacoId FROM food WHERE favorite = 1 AND tacoId IS NOT NULL")
-    suspend fun favoriteTacoIds(): List<Int>
-
-    @Query("UPDATE food SET favorite = 1 WHERE tacoId IN (:ids)")
-    suspend fun markTacoFavorites(ids: List<Int>)
-
-    @Query("UPDATE food SET favorite = :favorite WHERE id = :id")
-    suspend fun setFavorite(id: Long, favorite: Boolean)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(food: FoodEntity): Long
-
-    @Insert
-    suspend fun insertAll(foods: List<FoodEntity>)
-
-    @Delete
-    suspend fun delete(food: FoodEntity)
-
-    @Query("DELETE FROM food WHERE custom = 1")
-    suspend fun clearCustom()
-
-    @Query("UPDATE food SET favorite = 0")
-    suspend fun clearFavorites()
-}
-
-@Dao
-interface MealDao {
-    @Query("SELECT * FROM meal WHERE epochDay = :day ORDER BY id")
-    fun observeDay(day: Long): Flow<List<MealEntity>>
-
-    @Query("SELECT epochDay, SUM(kcal) AS total FROM meal GROUP BY epochDay ORDER BY epochDay")
-    fun observeDailyTotals(): Flow<List<DayTotal>>
-
-    @Query("SELECT * FROM meal")
-    suspend fun all(): List<MealEntity>
-
-    @Insert
-    suspend fun insert(meal: MealEntity)
-
-    @Insert
-    suspend fun insertAll(meals: List<MealEntity>)
-
-    @Delete
-    suspend fun delete(meal: MealEntity)
-
-    @Query("DELETE FROM meal")
-    suspend fun clear()
-}
-
-@Dao
-interface ExerciseDao {
-    @Query("SELECT COUNT(*) FROM exercise")
-    suspend fun count(): Int
-
-    @Query("SELECT * FROM exercise ORDER BY favorite DESC, category, name")
-    fun observeAll(): Flow<List<ExerciseEntity>>
-
-    @Query("SELECT * FROM exercise WHERE custom = 1")
-    suspend fun customExercises(): List<ExerciseEntity>
-
-    @Query("UPDATE exercise SET favorite = :favorite WHERE id = :id")
-    suspend fun setFavorite(id: Long, favorite: Boolean)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(exercise: ExerciseEntity): Long
-
-    @Insert
-    suspend fun insertAll(exercises: List<ExerciseEntity>)
-
-    @Delete
-    suspend fun delete(exercise: ExerciseEntity)
-
-    @Query("DELETE FROM exercise WHERE custom = 1")
-    suspend fun clearCustom()
-}
-
-@Dao
-interface WorkoutDao {
-    @Query("SELECT * FROM workout WHERE epochDay = :day ORDER BY id")
-    fun observeDay(day: Long): Flow<List<WorkoutEntity>>
-
-    @Query("SELECT epochDay, SUM(kcal) AS total FROM workout GROUP BY epochDay ORDER BY epochDay")
-    fun observeDailyTotals(): Flow<List<DayTotal>>
-
-    @Query("SELECT * FROM workout")
-    suspend fun all(): List<WorkoutEntity>
-
-    @Insert
-    suspend fun insert(workout: WorkoutEntity)
-
-    @Insert
-    suspend fun insertAll(workouts: List<WorkoutEntity>)
-
-    @Delete
-    suspend fun delete(workout: WorkoutEntity)
-
-    @Query("SELECT externalId FROM workout WHERE externalId IS NOT NULL")
-    suspend fun externalIds(): List<String>
-
-    @Query("DELETE FROM workout")
-    suspend fun clear()
-}
-
-@Dao
 interface FastDao {
     @Query("SELECT * FROM fast ORDER BY startMillis DESC")
     fun observeAll(): Flow<List<FastEntity>>
@@ -213,5 +90,20 @@ interface PhotoDao {
     suspend fun delete(photo: PhotoEntity)
 
     @Query("DELETE FROM photo")
+    suspend fun clear()
+}
+
+@Dao
+interface BadgeDao {
+    @Query("SELECT * FROM badge ORDER BY earnedMillis DESC")
+    fun observeAll(): Flow<List<BadgeEntity>>
+
+    @Query("SELECT * FROM badge")
+    suspend fun all(): List<BadgeEntity>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAll(badges: List<BadgeEntity>)
+
+    @Query("DELETE FROM badge")
     suspend fun clear()
 }
