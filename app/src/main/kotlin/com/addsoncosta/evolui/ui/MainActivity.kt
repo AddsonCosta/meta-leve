@@ -13,6 +13,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
@@ -22,6 +23,7 @@ import com.addsoncosta.evolui.AppContainer
 import com.addsoncosta.evolui.EvoluiApp
 import com.addsoncosta.evolui.core.Profile
 import com.addsoncosta.evolui.ui.onboarding.OnboardingScreen
+import com.addsoncosta.evolui.ui.theme.Evolui
 import com.addsoncosta.evolui.ui.theme.EvoluiTheme
 
 class MainActivity : ComponentActivity() {
@@ -33,9 +35,14 @@ class MainActivity : ComponentActivity() {
             finish()
             return
         }
-        val bars = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
-        enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
         setContent {
+            // Ícones da barra de status claros em temas escuros e escuros em temas claros.
+            val dark = Evolui.palette.dark
+            LaunchedEffect(dark) {
+                val transparent = android.graphics.Color.TRANSPARENT
+                val bars = if (dark) SystemBarStyle.dark(transparent) else SystemBarStyle.light(transparent, transparent)
+                enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
+            }
             EvoluiTheme {
                 // Fundo do tema por baixo de tudo, para o texto nunca ficar sem contraste.
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {

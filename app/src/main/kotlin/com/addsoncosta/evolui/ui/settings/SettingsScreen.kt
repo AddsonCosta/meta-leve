@@ -60,12 +60,11 @@ fun SettingsScreen(onBack: () -> Unit) {
     var editing by rememberSaveable { mutableStateOf(false) }
     var pendingImport by remember { mutableStateOf<Uri?>(null) }
 
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) scope.launch {
             val ok = runCatching {
-                val text = repo.exportBackup()
                 withContext(Dispatchers.IO) {
-                    context.contentResolver.openOutputStream(uri)!!.bufferedWriter().use { it.write(text) }
+                    context.contentResolver.openOutputStream(uri)!!.use { repo.exportBackupZip(it) }
                 }
             }.isSuccess
             Toast.makeText(context, if (ok) "Backup salvo" else "Não foi possível salvar o backup", Toast.LENGTH_SHORT).show()
@@ -87,7 +86,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar") }
-            Text("Perfil e ajustes", style = MaterialTheme.typography.headlineSmall)
+            Text("Configurações", style = MaterialTheme.typography.headlineSmall)
         }
         Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -106,47 +105,36 @@ fun SettingsScreen(onBack: () -> Unit) {
         }
         Button(onClick = { editing = true }, modifier = Modifier.fillMaxWidth()) { Text("Editar perfil e meta") }
 
+        ThemePicker()
+
         HealthCard()
 
         Text("Backup", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Text("Salve seus dados num arquivo para guardar ou levar para outro aparelho.", style = MaterialTheme.typography.bodySmall)
-        OutlinedButton(onClick = { exportLauncher.launch("evolui-backup-${LocalDate.now()}.json") }, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            "Salve tudo num arquivo (dados, fotos e anexos da Saúde) para guardar no Google Drive ou levar para outro aparelho.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        OutlinedButton(onClick = { exportLauncher.launch("evolui-backup-${LocalDate.now()}.zip") }, modifier = Modifier.fillMaxWidth()) {
             Text("Exportar backup")
         }
-        OutlinedButton(onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) }, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = { importLauncher.launch(arrayOf("application/zip", "application/json", "text/plain", "*/*")) }, modifier = Modifier.fillMaxWidth()) {
             Text("Restaurar backup")
         }
 
-        Text("Sobre", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Text(
-            "Evolui calcula o gasto diário pela equação de Mifflin-St Jeor e o nível de atividade, e compara com o que você come e os exercícios que faz.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Text(
-            "Alimentos: Tabela Brasileira de Composição de Alimentos (TACO), 4ª edição, NEPA/Unicamp. " +
-                "Exercícios: valores MET do Compendium of Physical Activities.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Text(
-            "Este app não substitui orientação médica ou de nutricionista.",
-            style = MaterialTheme.typography.bodySmall,
-        )
+        AboutCard()
     }
 
     pendingImport?.let { uri ->
         AlertDialog(
             onDismissRequest = { pendingImport = null },
             title = { Text("Restaurar backup?") },
-            text = { Text("Seus dados atuais (perfil, registros, alimentos e exercícios próprios) serão substituídos pelos do arquivo.") },
+            text = { Text("Seus dados atuais (perfil, registros, saúde, alimentos e exercícios próprios) serão substituídos pelos do arquivo.") },
             confirmButton = {
                 TextButton(onClick = {
                     pendingImport = null
                     scope.launch {
                         val ok = runCatching {
-                            val text = withContext(Dispatchers.IO) {
-                                context.contentResolver.openInputStream(uri)!!.bufferedReader().use { it.readText() }
-                            }
-                            repo.importBackup(text)
+                            repo.importBackupFile { context.contentResolver.openInputStream(uri)!! }
                         }.isSuccess
                         Toast.makeText(context, if (ok) "Backup restaurado" else "Arquivo de backup inválido", Toast.LENGTH_SHORT).show()
                     }

@@ -5,6 +5,11 @@ import android.net.Uri
 import androidx.room.withTransaction
 import com.addsoncosta.evolui.core.Profile
 import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import java.text.Normalizer
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
@@ -202,11 +207,72 @@ class Repository(private val context: Context, private val db: AppDatabase) {
             customExercises = db.exerciseDao().customExercises(),
             workouts = db.workoutDao().all(),
             fasts = db.fastDao().all(),
+            photos = db.photoDao().all(),
+            customPortions = db.foodPortionDao().customPortions(),
+            savedMeals = db.savedMealDao().all(),
+            savedMealItems = db.savedMealDao().allItems(),
+            badges = db.badgeDao().all(),
+            healthRecords = db.healthRecordDao().all(),
+            attachments = db.healthAttachmentDao().all(),
+            labResults = db.labResultDao().all(),
+            events = db.healthEventDao().all(),
+            conditions = db.healthConditionDao().all(),
+            teeth = db.toothStateDao().all(),
+            cycles = db.menstrualCycleDao().all(),
         )
         json.encodeToString(Backup.serializer(), backup)
     }
 
-    /** Substitui os dados pessoais pelos do backup. O catálogo TACO é mantido. */
+    /**
+     * Backup completo em .zip: os dados (backup.json) mais as fotos de progresso e os anexos da Saúde.
+     */
+    suspend fun exportBackupZip(out: OutputStream) = withContext(Dispatchers.IO) {
+        val text = exportBackup()
+        ZipOutputStream(out.buffered()).use { zip ->
+            zip.putNextEntry(ZipEntry(BACKUP_JSON))
+            zip.write(text.toByteArray())
+            zip.closeEntry()
+            for (dir in listOf(photoDir(), File(context.filesDir, ANEXOS_DIR))) {
+                dir.listFiles()?.filter { it.isFile }?.forEach { file ->
+                    zip.putNextEntry(ZipEntry("${dir.name}/${file.name}"))
+                    file.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
+            }
+        }
+    }
+
+    /** Restaura um backup .zip (ou o .json antigo, se o arquivo não for zip). */
+    suspend fun importBackupFile(input: () -> InputStream) = withContext(Dispatchers.IO) {
+        val head = input().use { stream -> ByteArray(2).also { stream.read(it) } }
+        val isZip = head[0] == 'P'.code.toByte() && head[1] == 'K'.code.toByte()
+        if (!isZip) {
+            importBackup(input().bufferedReader().use { it.readText() })
+            return@withContext
+        }
+        var text: String? = null
+        val allowedDirs = setOf(photoDir().name, ANEXOS_DIR)
+        ZipInputStream(input().buffered()).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                val name = entry.name
+                if (name == BACKUP_JSON) {
+                    text = zip.readBytes().decodeToString()
+                } else if (!entry.isDirectory) {
+                    // Só aceita arquivos simples dentro das pastas conhecidas (sem "../").
+                    val parts = name.split('/')
+                    if (parts.size == 2 && parts[0] in allowedDirs && parts[1].isNotBlank() && !parts[1].startsWith(".")) {
+                        val dir = File(context.filesDir, parts[0]).apply { mkdirs() }
+                        File(dir, File(parts[1]).name).outputStream().use { zip.copyTo(it) }
+                    }
+                }
+                zip.closeEntry()
+            }
+        }
+        importBackup(text ?: error("backup.json não encontrado"))
+    }
+
+    /** Substitui os dados pessoais pelos do backup. O catálogo de alimentos é mantido. */
     suspend fun importBackup(text: String) = withContext(Dispatchers.IO) {
         val backup = json.decodeFromString(Backup.serializer(), text)
         db.withTransaction {
@@ -218,6 +284,19 @@ class Repository(private val context: Context, private val db: AppDatabase) {
             db.foodDao().clearFavorites()
             db.exerciseDao().clearCustom()
             db.fastDao().clear()
+            db.foodPortionDao().clearCustom()
+            db.savedMealDao().clear()
+            db.savedMealDao().clearItems()
+            db.badgeDao().clear()
+            db.healthRecordDao().clear()
+            db.healthAttachmentDao().clear()
+            db.labResultDao().clear()
+            db.healthEventDao().clear()
+            db.healthConditionDao().clear()
+            db.toothStateDao().clear()
+            db.menstrualCycleDao().clear()
+            // Fotos: backups antigos (só .json) não trazem as fotos; nesse caso mantém as atuais.
+            if (backup.version >= 3) db.photoDao().clear()
 
             backup.profile?.let { db.profileDao().save(it) }
             db.dayLogDao().saveAll(backup.days)
@@ -227,6 +306,18 @@ class Repository(private val context: Context, private val db: AppDatabase) {
             db.mealDao().insertAll(backup.meals)
             db.workoutDao().insertAll(backup.workouts)
             db.fastDao().insertAll(backup.fasts)
+            if (backup.version >= 3) db.photoDao().insertAll(backup.photos)
+            db.foodPortionDao().insertAll(backup.customPortions)
+            backup.savedMeals.forEach { db.savedMealDao().insert(it) }
+            db.savedMealDao().insertItems(backup.savedMealItems)
+            db.badgeDao().insertAll(backup.badges)
+            db.healthRecordDao().insertAll(backup.healthRecords)
+            db.healthAttachmentDao().insertAll(backup.attachments)
+            db.labResultDao().insertAll(backup.labResults)
+            db.healthEventDao().insertAll(backup.events)
+            db.healthConditionDao().insertAll(backup.conditions)
+            db.toothStateDao().saveAll(backup.teeth)
+            db.menstrualCycleDao().insertAll(backup.cycles)
         }
     }
 
@@ -234,6 +325,9 @@ class Repository(private val context: Context, private val db: AppDatabase) {
 
     companion object {
         /** Minúsculas e sem acentos, para a busca encontrar "feijao" e "feijão". */
+        const val BACKUP_JSON = "backup.json"
+        const val ANEXOS_DIR = "anexos"
+
         fun normalize(text: String): String =
             Normalizer.normalize(text.trim().lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
     }
@@ -265,9 +359,21 @@ data class Backup(
     val customExercises: List<ExerciseEntity>,
     val workouts: List<WorkoutEntity>,
     val fasts: List<FastEntity> = emptyList(),
+    val photos: List<PhotoEntity> = emptyList(),
+    val customPortions: List<FoodPortionEntity> = emptyList(),
+    val savedMeals: List<SavedMealEntity> = emptyList(),
+    val savedMealItems: List<SavedMealItemEntity> = emptyList(),
+    val badges: List<BadgeEntity> = emptyList(),
+    val healthRecords: List<HealthRecordEntity> = emptyList(),
+    val attachments: List<HealthAttachmentEntity> = emptyList(),
+    val labResults: List<LabResultEntity> = emptyList(),
+    val events: List<HealthEventEntity> = emptyList(),
+    val conditions: List<HealthConditionEntity> = emptyList(),
+    val teeth: List<ToothStateEntity> = emptyList(),
+    val cycles: List<MenstrualCycleEntity> = emptyList(),
 ) {
     companion object {
-        const val VERSION = 2
+        const val VERSION = 3
     }
 }
 
