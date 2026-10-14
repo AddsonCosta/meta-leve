@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
@@ -33,6 +34,16 @@ interface ExerciseDao {
 
     @Query("DELETE FROM exercise WHERE custom = 1")
     suspend fun clearCustom()
+
+    @Query("SELECT * FROM exercise WHERE id = :id")
+    suspend fun byId(id: Long): ExerciseEntity?
+
+    @Query("SELECT name FROM exercise")
+    suspend fun names(): List<String>
+
+    /** Atualiza a categoria de um exercício do catálogo (não mexe nos do usuário). */
+    @Query("UPDATE exercise SET category = :category WHERE name = :name AND custom = 0")
+    suspend fun updateCategory(name: String, category: String)
 }
 
 @Dao
@@ -60,5 +71,21 @@ interface WorkoutDao {
 
     @Query("DELETE FROM workout")
     suspend fun clear()
+
+    /** Todas as atividades, das mais recentes para as mais antigas. */
+    @Query("SELECT * FROM workout ORDER BY epochDay DESC, startMillis DESC, id DESC")
+    fun observeHistory(): Flow<List<WorkoutEntity>>
+
+    @Query("SELECT * FROM workout WHERE epochDay BETWEEN :from AND :to")
+    suspend fun between(from: Long, to: Long): List<WorkoutEntity>
+
+    @Insert
+    suspend fun insertReturningId(workout: WorkoutEntity): Long
+
+    @Update
+    suspend fun update(workout: WorkoutEntity)
+
+    @Query("UPDATE workout SET hcWrittenId = :hcId WHERE id = :id")
+    suspend fun setHcWrittenId(id: Long, hcId: String?)
 }
 

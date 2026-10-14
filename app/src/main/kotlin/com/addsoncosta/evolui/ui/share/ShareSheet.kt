@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Share
@@ -41,6 +42,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,15 +53,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.addsoncosta.evolui.data.PeriodStats
+import com.addsoncosta.evolui.data.PhotoRepository
 import com.addsoncosta.evolui.ui.appContainer
 import com.addsoncosta.evolui.ui.components.Overline
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
  * Painel de compartilhar: escolhe o período, imagem ou texto, e manda para as redes.
- * [presetPhotos] já vem preenchido quando o usuário compartilha um antes e depois.
+ * [presetPhotos] já vem preenchido quando o usuário compartilha um antes e depois;
+ * [extraText] (opcional) entra antes do resumo no texto compartilhado.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,9 +72,13 @@ fun ShareSheet(
     onDismiss: () -> Unit,
     initialPeriod: SharePeriod = SharePeriod.Today,
     presetPhotos: List<CaptionedPhoto> = emptyList(),
+    extraText: String? = null,
 ) {
     val context = LocalContext.current
-    val repo = appContainer().repository
+    val container = appContainer()
+    val repo = container.repository
+    val photoRepo = remember { PhotoRepository(context, container.database) }
+    val scope = rememberCoroutineScope()
     var period by remember { mutableStateOf(initialPeriod) }
     var months by remember { mutableStateOf((initialPeriod as? SharePeriod.Months)?.count ?: 3) }
     var asImage by remember { mutableStateOf(true) }
@@ -77,11 +86,26 @@ fun ShareSheet(
     var extraPhoto by remember { mutableStateOf<CaptionedPhoto?>(null) }
     var stats by remember { mutableStateOf<PeriodStats?>(null) }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
+    // Enquadramento escolhido aqui para cada foto (pela posição na lista).
+    var framings by remember { mutableStateOf<Map<Int, Framing>>(emptyMap()) }
+    var editing by remember { mutableStateOf<Int?>(null) }
 
-    val photos = presetPhotos.ifEmpty { listOfNotNull(extraPhoto) }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) loadBitmap(context, uri)?.let { extraPhoto = CaptionedPhoto(it, "Eu hoje") }
+    val photos = remember(presetPhotos, extraPhoto, framings) {
+        presetPhotos.ifEmpty { listOfNotNull(extraPhoto) }.mapIndexed { i, p -> framings[i]?.let { p.withFraming(it) } ?: p }
     }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) scope.launch {
+            val bmp = withContext(Dispatchers.IO) { loadBitmap(context, uri) }
+            if (bmp != null) {
+                framings = emptyMap()
+                extraPhoto = CaptionedPhoto(bmp, "Eu hoje")
+                editing = 0 // já abre o ajuste de enquadramento
+            } else {
+                Toast.makeText(context, "Não foi possível abrir a foto", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    fun fullText(s: PeriodStats): String = listOfNotNull(extraText, shareText(s, period)).joinToString("\n\n")
 
     LaunchedEffect(period) {
         val (from, to) = period.range(LocalDate.now())
@@ -122,7 +146,7 @@ fun ShareSheet(
 
             val s = stats
             if (asImage) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ImageShape.entries.forEach { sh -> FilterChip(selected = shape == sh, onClick = { shape = sh }, label = { Text(sh.label) }) }
                 }
                 if (presetPhotos.isEmpty()) {
@@ -132,8 +156,33 @@ fun ShareSheet(
                             Text("  Incluir uma foto")
                         }
                     } else {
-                        OutlinedButton(onClick = { extraPhoto = null }) { Text("Tirar a foto") }
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { editing = 0 }) {
+                                Icon(Icons.Filled.Crop, null)
+                                Text("  Ajustar a foto")
+                            }
+                            OutlinedButton(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+                                Text("Trocar")
+                            }
+                            OutlinedButton(onClick = { extraPhoto = null; framings = emptyMap() }) { Text("Tirar a foto") }
+                        }
                     }
+                } else {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        photos.forEachIndexed { i, p ->
+                            OutlinedButton(onClick = { editing = i }) {
+                                Icon(Icons.Filled.Crop, null)
+                                Text("  Ajustar ${p.title?.lowercase() ?: "foto ${i + 1}"}")
+                            }
+                        }
+                    }
+                }
+                if (photos.isNotEmpty()) {
+                    Text(
+                        "Toque em Ajustar para escolher o melhor enquadramento: arraste e use dois dedos para aproximar.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 preview?.let {
                     Image(
@@ -145,7 +194,7 @@ fun ShareSheet(
                 }
             } else if (s != null) {
                 Text(
-                    shareText(s, period),
+                    fullText(s),
                     modifier = Modifier.fillMaxWidth(),
                     style = MaterialTheme.typography.bodyLarge,
                 )
@@ -154,7 +203,7 @@ fun ShareSheet(
             Button(
                 enabled = s != null && (!asImage || preview != null),
                 onClick = {
-                    val text = shareText(s!!, period)
+                    val text = fullText(s!!)
                     if (asImage) shareImage(context, preview!!, text) else shareTextOnly(context, text)
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
@@ -165,7 +214,7 @@ fun ShareSheet(
             OutlinedButton(
                 enabled = s != null,
                 onClick = {
-                    copyText(context, shareText(s!!, period))
+                    copyText(context, fullText(s!!))
                     Toast.makeText(context, "Texto copiado", Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -173,6 +222,27 @@ fun ShareSheet(
                 Icon(Icons.Filled.ContentCopy, null)
                 Text("  Copiar texto")
             }
+        }
+    }
+
+    editing?.let { i ->
+        val p = photos.getOrNull(i)
+        if (p != null) {
+            FrameEditorDialog(
+                bitmap = p.bitmap,
+                aspect = photoSlotAspect(shape, photos.size),
+                initial = p.framing,
+                title = if (p.title != null) "Ajustar foto: ${p.title.lowercase()}" else "Ajustar enquadramento",
+                onDismiss = { editing = null },
+                onSave = { f ->
+                    framings = framings + (i to f)
+                    editing = null
+                    // Foto de progresso: guarda o enquadramento para usar de novo.
+                    p.photoId?.let { id ->
+                        scope.launch { photoRepo.saveFraming(id, f.scale.toDouble(), f.offsetX.toDouble(), f.offsetY.toDouble()) }
+                    }
+                },
+            )
         }
     }
 }

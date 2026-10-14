@@ -47,8 +47,33 @@ enum class ImageShape(val label: String, val width: Int, val height: Int) {
     FEED("Feed", 1080, 1350),
 }
 
-/** Uma foto e a legenda que aparece sobre ela (data e peso, por exemplo). */
-class CaptionedPhoto(val bitmap: Bitmap, val caption: String)
+/**
+ * Uma foto e a legenda que aparece sobre ela (data e peso, por exemplo).
+ * [title] é o título pequeno no topo ("ANTES"/"DEPOIS"); [photoId], quando é uma foto de progresso,
+ * permite salvar o enquadramento escolhido.
+ */
+class CaptionedPhoto(
+    val bitmap: Bitmap,
+    val caption: String,
+    val framing: Framing = Framing(),
+    val title: String? = null,
+    val photoId: Long? = null,
+) {
+    fun withFraming(f: Framing) = CaptionedPhoto(bitmap, caption, f, title, photoId)
+}
+
+// Medidas da imagem gerada, usadas também pelo editor de enquadramento para ter a mesma proporção.
+private const val PAD = 72f
+private const val PHOTO_GAP = 24f
+
+private fun photoAreaHeight(shape: ImageShape): Float = if (shape == ImageShape.STORY) shape.height * 0.42f else shape.height * 0.36f
+
+/** Proporção (largura / altura) de cada foto na imagem final, com [count] fotos lado a lado. */
+fun photoSlotAspect(shape: ImageShape, count: Int): Float {
+    val n = count.coerceAtLeast(1)
+    val cellW = (shape.width - PAD * 2 - PHOTO_GAP * (n - 1)) / n
+    return cellW / photoAreaHeight(shape)
+}
 
 private fun signed(kg: Double): String = (if (kg > 0) "+" else if (kg < 0) "−" else "") + abs(kg).fmt(1)
 
@@ -110,7 +135,7 @@ fun renderShareImage(s: PeriodStats, period: SharePeriod, shape: ImageShape, pho
         typeface = Typeface.create(Typeface.SANS_SERIF, if (bold) Typeface.BOLD else Typeface.NORMAL)
     }
 
-    val pad = 72f
+    val pad = PAD
     var y = pad + 60f
     c.drawText("EVOLUI", pad, y, text(56f, neon).apply { letterSpacing = 0.2f })
     y += 56f
@@ -119,13 +144,14 @@ fun renderShareImage(s: PeriodStats, period: SharePeriod, shape: ImageShape, pho
 
     // Fotos (uma, ou duas lado a lado para antes e depois).
     if (photos.isNotEmpty()) {
-        val area = RectF(pad, y, w - pad, y + if (shape == ImageShape.STORY) h * 0.42f else h * 0.36f)
-        val gap = 24f
+        val area = RectF(pad, y, w - pad, y + photoAreaHeight(shape))
+        val gap = PHOTO_GAP
         val cellW = (area.width() - gap * (photos.size - 1)) / photos.size
         photos.forEachIndexed { i, p ->
             val cell = RectF(area.left + i * (cellW + gap), area.top, area.left + i * (cellW + gap) + cellW, area.bottom)
-            drawCover(c, p.bitmap, cell, 36f)
-            val label = text(34f, white)
+            drawFramed(c, p.bitmap, cell, 36f, p.framing)
+            p.title?.let { t -> drawPhotoTitle(c, t, cell, 36f) }
+            val label = text(if (photos.size > 1) 30f else 34f, white)
             val tw = label.measureText(p.caption)
             val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xB30B0F0E.toInt() }
             c.drawRoundRect(RectF(cell.left + 20f, cell.bottom - 84f, cell.left + 52f + tw, cell.bottom - 20f), 32f, 32f, bg)
@@ -185,18 +211,33 @@ fun renderShareImage(s: PeriodStats, period: SharePeriod, shape: ImageShape, pho
     return bmp
 }
 
-/** Recorta a imagem para preencher o retângulo, com cantos arredondados. */
-private fun drawCover(c: Canvas, bmp: Bitmap, dst: RectF, radius: Float) {
-    val scale = max(dst.width() / bmp.width, dst.height() / bmp.height)
-    val sw = dst.width() / scale
-    val sh = dst.height() / scale
-    val sx = (bmp.width - sw) / 2
-    val sy = (bmp.height - sh) / 2
-    val src = android.graphics.Rect(sx.toInt(), sy.toInt(), (sx + sw).toInt(), (sy + sh).toInt())
+/** Desenha a foto no retângulo com o enquadramento escolhido, cortando o que sobra, com cantos arredondados. */
+internal fun drawFramed(c: Canvas, bmp: Bitmap, dst: RectF, radius: Float, framing: Framing) {
+    val r = framing.rectFor(bmp.width, bmp.height, dst.width(), dst.height())
+    val target = RectF(dst.left + r.left, dst.top + r.top, dst.left + r.left + r.width, dst.top + r.top + r.height)
     c.save()
     c.clipPath(Path().apply { addRoundRect(dst, radius, radius, Path.Direction.CW) })
-    c.drawBitmap(bmp, src, dst, Paint(Paint.FILTER_BITMAP_FLAG))
+    c.drawBitmap(bmp, null, target, Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
     c.restore()
+}
+
+/** Título pequeno ("ANTES") no topo da foto, sobre um degradê leve que não cobre o rosto. */
+private fun drawPhotoTitle(c: Canvas, title: String, cell: RectF, radius: Float) {
+    val fadeH = 110f
+    val fade = Paint().apply {
+        shader = LinearGradient(0f, cell.top, 0f, cell.top + fadeH, 0x990B0F0E.toInt(), 0x000B0F0E, Shader.TileMode.CLAMP)
+    }
+    c.save()
+    c.clipPath(Path().apply { addRoundRect(cell, radius, radius, Path.Direction.CW) })
+    c.drawRect(cell.left, cell.top, cell.right, cell.top + fadeH, fade)
+    c.restore()
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 28f
+        color = 0xFFF2F5F3.toInt()
+        letterSpacing = 0.18f
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+    }
+    c.drawText(title.uppercase(), cell.left + 28f, cell.top + 52f, paint)
 }
 
 /** Abre uma foto já reduzida, respeitando a rotação da câmera. */

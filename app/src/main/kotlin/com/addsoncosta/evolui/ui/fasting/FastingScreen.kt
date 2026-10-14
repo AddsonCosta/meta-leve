@@ -1,5 +1,7 @@
 package com.addsoncosta.evolui.ui.fasting
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -36,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.addsoncosta.evolui.data.FastEntity
 import com.addsoncosta.evolui.ui.appContainer
 import com.addsoncosta.evolui.ui.components.DayFormat
@@ -73,6 +77,7 @@ fun FastingScreen() {
     var protocol by rememberSaveable { mutableStateOf(Protocol.P16) }
     var confirmStop by remember { mutableStateOf(false) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var phaseInfo by remember { mutableStateOf<FastPhase?>(null) }
 
     LaunchedEffect(running?.id) {
         while (running != null) {
@@ -102,6 +107,7 @@ fun FastingScreen() {
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (running != null) Text(FastPhase.at(elapsed / HOUR.toDouble()).emoji, fontSize = 30.sp)
                         Text(clock(elapsed), style = MaterialTheme.typography.displaySmall)
                         Text(
                             when {
@@ -114,6 +120,24 @@ fun FastingScreen() {
                     }
                 }
                 if (running != null) {
+                    val phase = FastPhase.at(elapsed / HOUR.toDouble())
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { phaseInfo = phase }
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), MaterialTheme.shapes.medium)
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(phase.emoji, fontSize = 32.sp)
+                        Column(Modifier.weight(1f)) {
+                            Overline("Fase atual · ${phase.range}", color = MaterialTheme.colorScheme.primary)
+                            Text(phase.title, style = MaterialTheme.typography.titleMedium)
+                            Text(phase.short, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Icon(Icons.Filled.Info, "Saber mais", tint = MaterialTheme.colorScheme.primary)
+                    }
                     val zone = ZoneId.systemDefault()
                     val start = Instant.ofEpochMilli(running.startMillis).atZone(zone)
                     val end = Instant.ofEpochMilli(running.startMillis + running.targetHours * HOUR).atZone(zone)
@@ -144,6 +168,22 @@ fun FastingScreen() {
                 }
             }
         }
+        item {
+            Panel {
+                Text("Fases do jejum", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (running != null) "Veja em que fase você está e quando começa cada uma. Toque numa fase para entender."
+                    else "O que acontece no corpo, hora a hora. Toque numa fase para entender.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                PhaseTimeline(
+                    startMillis = running?.startMillis,
+                    elapsedHours = running?.let { (now - it.startMillis).coerceAtLeast(0) / HOUR.toDouble() },
+                )
+                Text(FASTING_DISCLAIMER, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         if (done.isNotEmpty()) {
             item {
                 val hours = done.sumOf { (it.endMillis!! - it.startMillis) / HOUR.toDouble() }
@@ -160,13 +200,15 @@ fun FastingScreen() {
         }
         item {
             Text(
-                "Jejum não é indicado para gestantes, menores de idade, diabéticos ou quem tem histórico de transtorno alimentar. Na dúvida, fale com um profissional.",
+                "Jejum não é indicado para gestantes, menores de idade, diabéticos ou quem tem histórico de transtorno alimentar. Na dúvida, fale com um profissional. As fases são aproximadas e variam de pessoa para pessoa.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
     }
+
+    phaseInfo?.let { PhaseDialog(it, onDismiss = { phaseInfo = null }) }
 
     if (confirmStop && running != null) {
         AlertDialog(
@@ -194,6 +236,8 @@ private fun FastRow(fast: FastEntity, onDelete: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(start.toLocalDate().format(DayFormat), fontWeight = FontWeight.Bold)
                 Text("Início ${start.format(TimeFormat)} · meta ${fast.targetHours} h", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                val reached = FastPhase.at(duration / HOUR.toDouble())
+                Text("${reached.emoji} Chegou a: ${reached.title}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(clock(duration), style = MaterialTheme.typography.titleMedium, color = if (ok) Evolui.Neon else Evolui.Orange)
             IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, "Apagar") }

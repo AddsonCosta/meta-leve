@@ -142,7 +142,7 @@ object Reminders {
             .build()
         try {
             NotificationManagerCompat.from(context).notify(event.id.toInt(), notification)
-        } catch (_: SecurityException) {
+        } catch (e: SecurityException) {
             // Permissão retirada entre a verificação e o aviso: ignora.
         }
     }

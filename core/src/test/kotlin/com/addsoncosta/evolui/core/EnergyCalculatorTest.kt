@@ -62,6 +62,33 @@ class EnergyCalculatorTest {
     }
 
     @Test
+    fun personalExerciseKcalUsesRestingRate() {
+        // 1780 kcal/dia de repouso = 1,236 kcal/min; MET 8 por 30 min.
+        assertEquals(296.67, EnergyCalculator.personalExerciseKcal(8.0, 30.0, 1780.0), delta)
+        assertEquals(
+            EnergyCalculator.personalExerciseKcal(8.0, 30.0, 1780.0),
+            EnergyCalculator.personalExerciseKcal(8.0, 30.0, Sex.MALE, 80.0, 180.0, 30),
+            delta,
+        )
+    }
+
+    @Test
+    fun personalExerciseKcalIsZeroForInvalidInput() {
+        assertEquals(0.0, EnergyCalculator.personalExerciseKcal(8.0, 0.0, 1780.0), delta)
+        assertEquals(0.0, EnergyCalculator.personalExerciseKcal(8.0, 30.0, 0.0), delta)
+        assertEquals(0.0, EnergyCalculator.personalExerciseKcal(0.0, 30.0, 1780.0), delta)
+    }
+
+    @Test
+    fun personalExerciseKcalGrowsWithBodySize() {
+        val small = EnergyCalculator.personalExerciseKcal(6.0, 60.0, Sex.FEMALE, 55.0, 160.0, 40)
+        val big = EnergyCalculator.personalExerciseKcal(6.0, 60.0, Sex.MALE, 98.0, 178.0, 45)
+        assertTrue(big > small)
+        // 98 kg, 1,78 m, 45 anos, homem: TMB 1872,5 kcal/dia.
+        assertEquals(6.0 * 1872.5 / 1440 * 60, big, delta)
+    }
+
+    @Test
     fun summaryFlagsUnsafeIntake() {
         val p = Profile(
             name = "Teste", sex = Sex.FEMALE, birthDate = LocalDate.of(1990, 1, 1), heightCm = 160.0,

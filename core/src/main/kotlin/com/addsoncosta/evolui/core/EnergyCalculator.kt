@@ -86,8 +86,23 @@ object EnergyCalculator {
         fatG = kcal * fatPercent / 100 / 9,
     )
 
-    /** kcal gastas num exercício pelo valor MET. */
+    /** kcal gastas num exercício pelo valor MET (fórmula clássica: 1 MET = 1 kcal/kg/h). */
     fun exerciseKcal(met: Double, weightKg: Double, minutes: Double): Double = met * weightKg * minutes / 60
+
+    /**
+     * kcal de um exercício ajustadas à pessoa: em vez de supor o mesmo repouso para todos
+     * (3,5 ml O2/kg/min), usa o gasto em repouso dela (Mifflin-St Jeor): MET × (TMB / 1440) × minutos.
+     */
+    fun personalExerciseKcal(met: Double, minutes: Double, restingKcalPerDay: Double): Double {
+        if (met <= 0 || minutes <= 0 || restingKcalPerDay <= 0) return 0.0
+        return met * (restingKcalPerDay / MINUTES_PER_DAY) * minutes
+    }
+
+    /** O mesmo que [personalExerciseKcal], calculando o repouso por sexo, peso, altura e idade. */
+    fun personalExerciseKcal(met: Double, minutes: Double, sex: Sex, weightKg: Double, heightCm: Double, age: Int): Double =
+        personalExerciseKcal(met, minutes, restingRate(sex, weightKg, heightCm, age))
+
+    private const val MINUTES_PER_DAY = 1440.0
 
     /** Resumo pronto para a tela Hoje. */
     fun summary(profile: Profile, date: LocalDate, weightKg: Double, activity: ActivityLevel, eaten: Double, exercise: Double): DaySummary {

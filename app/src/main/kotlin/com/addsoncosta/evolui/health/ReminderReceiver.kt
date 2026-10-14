@@ -33,7 +33,7 @@ class ReminderReceiver : BroadcastReceiver() {
                         }
                     }
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 // Nunca derrubar o app por causa de um lembrete.
             } finally {
                 pending.finish()

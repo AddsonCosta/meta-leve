@@ -25,6 +25,20 @@ interface HealthRecordDao {
     @Query("SELECT * FROM health_record")
     suspend fun all(): List<HealthRecordEntity>
 
+    @Query("SELECT * FROM health_record WHERE type = :type ORDER BY epochDay DESC, id DESC")
+    suspend fun byType(type: String): List<HealthRecordEntity>
+
+    /** Locais já usados (laboratórios, clínicas), para sugerir no formulário. */
+    @Query("SELECT DISTINCT place FROM health_record WHERE type = :type AND place IS NOT NULL AND place != '' ORDER BY place")
+    fun observePlaces(type: String): Flow<List<String>>
+
+    /** Profissionais já usados, para sugerir no formulário. */
+    @Query("SELECT DISTINCT professional FROM health_record WHERE type = :type AND professional IS NOT NULL AND professional != '' ORDER BY professional")
+    fun observeProfessionals(type: String): Flow<List<String>>
+
+    @Query("SELECT DISTINCT place FROM health_record WHERE type = :type AND place IS NOT NULL AND place != ''")
+    suspend fun places(type: String): List<String>
+
     @Upsert
     suspend fun save(record: HealthRecordEntity): Long
 
@@ -48,6 +62,12 @@ interface HealthAttachmentDao {
 
     @Query("SELECT * FROM health_attachment")
     suspend fun all(): List<HealthAttachmentEntity>
+
+    @Query("SELECT * FROM health_attachment")
+    fun observeAll(): Flow<List<HealthAttachmentEntity>>
+
+    @Query("DELETE FROM health_attachment WHERE recordId = :recordId")
+    suspend fun deleteFor(recordId: Long)
 
     @Upsert
     suspend fun save(attachment: HealthAttachmentEntity): Long
@@ -78,6 +98,13 @@ interface LabResultDao {
 
     @Query("DELETE FROM lab_result WHERE recordId = :recordId")
     suspend fun deleteFor(recordId: Long)
+
+    @Query("SELECT * FROM lab_result WHERE recordId = :recordId ORDER BY id")
+    suspend fun forRecord(recordId: Long): List<LabResultEntity>
+
+    /** Mantém a data dos valores igual à do exame. */
+    @Query("UPDATE lab_result SET epochDay = :epochDay WHERE recordId = :recordId")
+    suspend fun moveTo(recordId: Long, epochDay: Long)
 
     @Insert
     suspend fun insertAll(results: List<LabResultEntity>)

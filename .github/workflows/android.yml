@@ -52,6 +52,10 @@ jobs:
           path: app/build/outputs/bundle/release/*.aab
 
       # Esquema do banco gerado pelo Room, para conferir as migrações.
+      - name: Mostrar esquema do banco
+        if: always()
+        run: find app/schemas -name '*.json' -print -exec cat {} \; || true
+
       - uses: actions/upload-artifact@v4
         with:
           name: room-schemas

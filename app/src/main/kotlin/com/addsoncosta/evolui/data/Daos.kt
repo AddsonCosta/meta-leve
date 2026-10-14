@@ -91,6 +91,19 @@ interface PhotoDao {
 
     @Query("DELETE FROM photo")
     suspend fun clear()
+
+    @Query("SELECT * FROM photo WHERE id = :id")
+    suspend fun get(id: Long): PhotoEntity?
+
+    /** Insere e devolve o id da foto nova. */
+    @Insert
+    suspend fun insertReturningId(photo: PhotoEntity): Long
+
+    @androidx.room.Update
+    suspend fun update(photo: PhotoEntity)
+
+    @Query("UPDATE photo SET scale = :scale, offsetX = :offsetX, offsetY = :offsetY WHERE id = :id")
+    suspend fun setFraming(id: Long, scale: Double?, offsetX: Double?, offsetY: Double?)
 }
 
 @Dao
@@ -106,4 +119,7 @@ interface BadgeDao {
 
     @Query("DELETE FROM badge")
     suspend fun clear()
+
+    @Query("SELECT COUNT(*) FROM badge")
+    fun observeCount(): Flow<Int>
 }
