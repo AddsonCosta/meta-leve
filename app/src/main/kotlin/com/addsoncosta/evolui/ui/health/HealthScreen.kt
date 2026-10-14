@@ -168,7 +168,7 @@ private fun HealthHub(onOpen: (String) -> Unit, onOpenProgress: () -> Unit, onOp
     }
     val q = Repository.normalize(query)
     val found = remember(index, q) {
-        if (q.length < 2) emptyList() else {
+        if (q.length < 2) emptyList<HealthRecordEntity>() else {
             val words = q.split(' ').filter { it.isNotBlank() }
             index.filter { (_, text) -> words.all { text.contains(it) } }.map { it.first }
         }
@@ -229,7 +229,9 @@ private fun HealthHub(onOpen: (String) -> Unit, onOpenProgress: () -> Unit, onOp
             if (found.isEmpty()) {
                 item { EmptyNote("Nada encontrado", "Tente outra palavra, sem acento ou só o começo dela.") }
             }
-            items(found, key = { it.id }) { r -> SearchResult(r, onClick = { onOpen("detail:${r.id}") }) }
+            items(found, key = { it.id }) { r ->
+                SearchResult(r, onClick = { onOpen(if (r.type == HealthType.ANAMNESE.name) "anamnesis" else "detail:${r.id}") })
+            }
             return@LazyColumn
         }
 

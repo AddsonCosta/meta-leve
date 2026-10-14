@@ -104,7 +104,7 @@ object Ocr {
         val groups = mutableListOf<MutableList<L>>()
         for (l in lines) {
             val g = groups.lastOrNull()
-            if (g != null && abs(g.first().cy - l.cy) < (g.first().h * 0.6)) g += l else groups += mutableListOf(l)
+            if (g != null && abs(g.first().cy - l.cy).toDouble() < g.first().h * 0.6) g.add(l) else groups.add(mutableListOf(l))
         }
         return groups.joinToString("\n") { g -> g.sortedBy { it.left }.joinToString("   ") { it.text } }
     }
