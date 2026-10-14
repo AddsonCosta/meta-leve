@@ -13,7 +13,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.addsoncosta.evolui"
+        applicationId = "com.evolui.myapp"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
