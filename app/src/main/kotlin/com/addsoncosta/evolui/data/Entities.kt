@@ -71,6 +71,8 @@ data class DayLogEntity(
     val weightKg: Double? = null,
     val activity: String? = null,
     val note: String? = null,
+    /** Água bebida no dia, em ml. */
+    val waterMl: Double? = null,
 )
 
 /** Alimento com valores por 100 g. */
@@ -91,6 +93,10 @@ data class FoodEntity(
     val favorite: Boolean = false,
     val custom: Boolean = false,
     val tacoId: Int? = null,
+    /** Líquido: a quantidade pode ser registrada em ml (densidade em g/ml). */
+    val densityGPerMl: Double? = null,
+    /** "TACO", "EXTRA" (lista complementar do app) ou nulo para alimentos do usuário. */
+    val source: String? = null,
 )
 
 enum class MealType(val label: String) {
@@ -114,6 +120,9 @@ data class MealEntity(
     val protein: Double,
     val fat: Double,
     val carb: Double,
+    /** Quantidade na medida escolhida (ex.: 1.5 com [unit] "xícara"); [grams] continua sendo a base do cálculo. */
+    val amount: Double? = null,
+    val unit: String? = null,
 )
 
 @Serializable
@@ -138,6 +147,12 @@ data class WorkoutEntity(
     val kcal: Double,
     /** Id do registro no Health Connect, para não importar o mesmo treino duas vezes. */
     val externalId: String? = null,
+    /** App de origem (pacote Android) quando veio do Health Connect; nulo quando foi lançado no Evolui. */
+    val source: String? = null,
+    val startMillis: Long? = null,
+    val endMillis: Long? = null,
+    /** Id do registro que o Evolui gravou no Health Connect (para não gravar duas vezes). */
+    val hcWrittenId: String? = null,
 )
 
 /** Um jejum. Sem [endMillis] significa que está em andamento. */
@@ -158,6 +173,57 @@ data class PhotoEntity(
     val epochDay: Long,
     val fileName: String,
     val weightKg: Double? = null,
+    /** Enquadramento escolhido: zoom (1 = foto inteira) e deslocamento do centro, em fração da largura/altura. */
+    val scale: Double? = null,
+    val offsetX: Double? = null,
+    val offsetY: Double? = null,
+    /** Texto mostrado na foto no lugar de data e peso, quando o usuário edita. */
+    val caption: String? = null,
+)
+
+/** Medida caseira de um alimento (ex.: "1 fatia" = 25 g). */
+@Serializable
+@Entity(tableName = "food_portion", indices = [Index("foodId")])
+data class FoodPortionEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val foodId: Long,
+    val name: String,
+    val grams: Double,
+    val custom: Boolean = false,
+)
+
+/** Refeição salva para registrar de novo com um toque (ex.: "Café de sempre"). */
+@Serializable
+@Entity(tableName = "saved_meal")
+data class SavedMealEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val mealType: String,
+    val createdMillis: Long,
+)
+
+@Serializable
+@Entity(tableName = "saved_meal_item", indices = [Index("savedMealId")])
+data class SavedMealItemEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val savedMealId: Long,
+    val foodId: Long?,
+    val name: String,
+    val grams: Double,
+    val kcal: Double,
+    val protein: Double,
+    val fat: Double,
+    val carb: Double,
+    val amount: Double? = null,
+    val unit: String? = null,
+)
+
+/** Conquista ganha. [key] identifica o badge (ver Badges.kt). */
+@Serializable
+@Entity(tableName = "badge")
+data class BadgeEntity(
+    @PrimaryKey val key: String,
+    val earnedMillis: Long,
 )
 
 data class DayTotal(val epochDay: Long, val total: Double)

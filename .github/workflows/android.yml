@@ -23,10 +23,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Testes dos cálculos
-        run: ./gradlew :core:test --stacktrace
+        run: set -o pipefail; ./gradlew :core:test --stacktrace 2>&1 | tee -a build.log
 
       - name: APK de debug
-        run: ./gradlew :app:assembleDebug --stacktrace
+        run: set -o pipefail; ./gradlew :app:assembleDebug --stacktrace 2>&1 | tee -a build.log
 
       - name: Chave de upload (se configurada)
         if: env.KEYSTORE_BASE64 != ''
@@ -39,7 +39,7 @@ jobs:
           EVOLUI_KEYSTORE_PASSWORD: ${{ secrets.EVOLUI_KEYSTORE_PASSWORD }}
           EVOLUI_KEY_ALIAS: ${{ secrets.EVOLUI_KEY_ALIAS }}
           EVOLUI_KEY_PASSWORD: ${{ secrets.EVOLUI_KEY_PASSWORD }}
-        run: ./gradlew :app:bundleRelease --stacktrace
+        run: set -o pipefail; ./gradlew :app:bundleRelease --stacktrace 2>&1 | tee -a build.log
 
       - uses: actions/upload-artifact@v4
         with:
@@ -50,3 +50,19 @@ jobs:
         with:
           name: evolui-release-aab
           path: app/build/outputs/bundle/release/*.aab
+
+      # Esquema do banco gerado pelo Room, para conferir as migrações.
+      - name: Mostrar esquema do banco
+        if: always()
+        run: find app/schemas -name '3.json' -print -exec cat {} \; || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: room-schemas
+          path: app/schemas
+
+      # Resumo dos erros no fim do log, para achar rápido o que quebrou.
+      - name: Resumo dos erros
+        if: failure()
+        run: |
+          grep -E "^e: |What went wrong|error:|FAILED|Execution failed" -A3 build.log | head -200 || true

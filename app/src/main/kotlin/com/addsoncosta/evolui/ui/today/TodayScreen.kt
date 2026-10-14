@@ -16,7 +16,9 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
@@ -50,7 +52,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.addsoncosta.evolui.core.ActivityLevel
+import com.addsoncosta.evolui.data.MealEntity
 import com.addsoncosta.evolui.data.MealType
+import com.addsoncosta.evolui.ui.food.WaterCard
+import com.addsoncosta.evolui.ui.health.UpcomingEventsCard
+import com.addsoncosta.evolui.ui.score.HealthScoreCard
 import com.addsoncosta.evolui.ui.appContainer
 import com.addsoncosta.evolui.ui.components.DayFormat
 import com.addsoncosta.evolui.ui.components.MiniRing
@@ -68,7 +74,16 @@ import java.time.LocalDate
 import java.time.LocalTime
 
 @Composable
-fun TodayScreen(onAddFood: () -> Unit, onAddExercise: () -> Unit, onOpenProfile: () -> Unit) {
+fun TodayScreen(
+    onAddFood: () -> Unit,
+    onAddExercise: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenProgress: () -> Unit,
+    onOpenBadges: () -> Unit,
+    onOpenFasting: () -> Unit,
+    onOpenHealth: () -> Unit,
+) {
+    val onOpenProfile = onOpenSettings
     val container = appContainer()
     val vm: TodayViewModel = viewModel(factory = viewModelFactory { initializer { TodayViewModel(container) } })
     val state by vm.state.collectAsStateWithLifecycle()
@@ -90,8 +105,10 @@ fun TodayScreen(onAddFood: () -> Unit, onAddExercise: () -> Unit, onOpenProfile:
                     Overline(if (isToday) greeting() + ", " + s.profile.name.substringBefore(" ") else "Registro do dia")
                     Text(if (isToday) "Hoje" else s.date.format(DayFormat), style = MaterialTheme.typography.headlineMedium)
                 }
+                IconButton(onClick = onOpenProgress) { Icon(Icons.Filled.Insights, "Progresso, fotos e antes e depois") }
+                IconButton(onClick = onOpenBadges) { Icon(Icons.Filled.EmojiEvents, "Conquistas") }
                 IconButton(onClick = { sharing = true }) { Icon(Icons.Filled.Share, "Compartilhar") }
-                IconButton(onClick = onOpenProfile) { Icon(Icons.Filled.Settings, "Perfil e ajustes") }
+                IconButton(onClick = onOpenSettings) { Icon(Icons.Filled.Settings, "Configurações") }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { vm.shiftDay(-1) }) {
@@ -160,6 +177,15 @@ fun TodayScreen(onAddFood: () -> Unit, onAddExercise: () -> Unit, onOpenProfile:
             }
         }
 
+        // Água do dia.
+        item(key = "agua") { WaterCard(s.date) }
+
+        // Nota de autocuidado.
+        item(key = "nota") { HealthScoreCard(onOpenBadges = onOpenBadges) }
+
+        // Próximos compromissos de saúde.
+        item(key = "agenda") { UpcomingEventsCard(onOpenHealth = onOpenHealth) }
+
         // Samsung Health.
         item {
             val h = health
@@ -212,7 +238,7 @@ fun TodayScreen(onAddFood: () -> Unit, onAddExercise: () -> Unit, onOpenProfile:
                     val meals = s.meals.filter { it.mealType == type.name }
                     if (meals.isNotEmpty()) {
                         Text(type.label, style = MaterialTheme.typography.labelLarge, color = Evolui.Neon)
-                        meals.forEach { meal -> EntryRow(meal.name, "${meal.grams.fmt()} g", meal.kcal) { vm.deleteMeal(meal) } }
+                        meals.forEach { meal -> EntryRow(meal.name, mealAmount(meal), meal.kcal) { vm.deleteMeal(meal) } }
                     }
                 }
             }
@@ -224,7 +250,7 @@ fun TodayScreen(onAddFood: () -> Unit, onAddExercise: () -> Unit, onOpenProfile:
                 SectionHeader("Exercícios", "${s.summary.exercise.fmt()} kcal", onAddExercise)
                 if (s.workouts.isEmpty()) Text("Nenhum exercício hoje.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 s.workouts.forEach { w ->
-                    EntryRow(w.name, "${w.minutes.fmt()} min" + if (w.externalId != null) " · Samsung Health" else "", w.kcal, Evolui.Orange) { vm.deleteWorkout(w) }
+                    EntryRow(w.name, "${w.minutes.fmt()} min" + if (w.externalId != null) " · " + sourceLabel(w.source) else "", w.kcal, Evolui.Orange) { vm.deleteWorkout(w) }
                 }
             }
         }
@@ -350,4 +376,25 @@ private fun EntryRow(title: String, detail: String, kcal: Double, color: Color =
         Text("${kcal.fmt()} kcal", fontWeight = FontWeight.Bold, color = color)
         IconButton(onClick = onDelete) { Icon(Icons.Filled.Close, "Remover", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
+}
+
+/** "1,5 xícara (360 g)" quando a medida foi escolhida; senão "150 g". */
+private fun mealAmount(meal: MealEntity): String {
+    val unit = meal.unit
+    val amount = meal.amount
+    return if (unit != null && amount != null && unit != "g") "${amount.fmt(1)} $unit (${meal.grams.fmt()} g)" else "${meal.grams.fmt()} g"
+}
+
+/** Nome do app de onde veio um treino importado. */
+internal fun sourceLabel(packageName: String?): String = when {
+    packageName == null -> "Health Connect"
+    "strava" in packageName -> "Strava"
+    "samsung" in packageName || "shealth" in packageName -> "Samsung Health"
+    "garmin" in packageName -> "Garmin"
+    "fitbit" in packageName -> "Fitbit"
+    "google.android.apps.fitness" in packageName -> "Google Fit"
+    "polar" in packageName -> "Polar"
+    "huawei" in packageName -> "Huawei Saúde"
+    "xiaomi" in packageName || "mi.health" in packageName || "zepp" in packageName -> "Zepp/Mi Fitness"
+    else -> "Health Connect"
 }
