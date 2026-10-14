@@ -64,4 +64,5 @@ jobs:
       # Resumo dos erros no fim do log, para achar rápido o que quebrou.
       - name: Resumo dos erros
         if: failure()
-        run: grep -E "^e: |What went wrong|error:|FAILED|Execution failed" -A3 build.log | head -200 || true
+        run: |
+          grep -E "^e: |What went wrong|error:|FAILED|Execution failed" -A3 build.log | head -200 || true
