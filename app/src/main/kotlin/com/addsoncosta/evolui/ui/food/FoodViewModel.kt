@@ -76,6 +76,11 @@ class FoodViewModel(private val container: AppContainer) : ViewModel() {
         foods.log(date.value, food, choice, mealType)
     }
 
+    /** Registra os alimentos do prato por foto no dia selecionado. */
+    fun logPlate(items: List<Pair<FoodEntity, PortionChoice>>, mealType: MealType): Job = viewModelScope.launch {
+        foods.logAll(date.value, items, mealType)
+    }
+
     fun toggleFavorite(food: FoodEntity) = viewModelScope.launch { repo.setFoodFavorite(food, !food.favorite) }
 
     fun saveCustom(food: FoodEntity) = viewModelScope.launch { repo.saveCustomFood(food) }

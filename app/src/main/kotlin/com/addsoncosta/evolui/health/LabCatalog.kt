@@ -97,6 +97,7 @@ object LabCatalog {
         LabItem("Massa muscular esquelética", BIO, "kg", synonyms = listOf("massa muscular esqueletica", "mme", "smm", "massa muscular")),
         LabItem("Massa magra", BIO, "kg", synonyms = listOf("massa magra", "massa livre de gordura", "mlg")),
         LabItem("Água corporal", BIO, "%", 50.0, 65.0, synonyms = listOf("agua corporal", "agua corporal total", "% de agua", "hidratacao"), femaleLow = 45.0, femaleHigh = 60.0),
+        LabItem("Água corporal total", BIO, "L", synonyms = listOf("agua corporal total em litros", "agua total (l)")),
         LabItem("Gordura visceral", BIO, "nível", 1.0, 9.0, "1 a 9 é o ideal", listOf("gordura visceral", "nivel de gordura visceral", "area de gordura visceral")),
         LabItem("Massa óssea", BIO, "kg", synonyms = listOf("massa ossea", "minerais", "massa mineral ossea")),
         LabItem("Taxa metabólica basal", BIO, "kcal", synonyms = listOf("taxa metabolica basal", "tmb", "metabolismo basal", "bmr")),

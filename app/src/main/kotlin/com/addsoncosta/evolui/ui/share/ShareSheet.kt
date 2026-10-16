@@ -56,6 +56,7 @@ import com.addsoncosta.evolui.data.PeriodStats
 import com.addsoncosta.evolui.data.PhotoRepository
 import com.addsoncosta.evolui.ui.appContainer
 import com.addsoncosta.evolui.ui.components.Overline
+import com.addsoncosta.evolui.ui.theme.Evolui
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -111,9 +112,11 @@ fun ShareSheet(
         val (from, to) = period.range(LocalDate.now())
         stats = repo.periodStats(from, to)
     }
-    LaunchedEffect(stats, shape, photos, asImage) {
+    // A imagem segue o tema escolhido: trocar o tema refaz a prévia.
+    val palette = Evolui.palette
+    LaunchedEffect(stats, shape, photos, asImage, palette) {
         val s = stats ?: return@LaunchedEffect
-        if (asImage) preview = withContext(Dispatchers.Default) { renderShareImage(s, period, shape, photos) }
+        if (asImage) preview = withContext(Dispatchers.Default) { renderShareImage(s, period, shape, photos, palette) }
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {

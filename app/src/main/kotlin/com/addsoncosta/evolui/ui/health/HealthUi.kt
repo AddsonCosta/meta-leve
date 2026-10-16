@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SentimentSatisfied
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -81,6 +82,7 @@ fun HealthType.color(): Color = when (this) {
     HealthType.TRATAMENTO -> Evolui.Red
     HealthType.BIOIMPEDANCIA -> Evolui.Neon
     HealthType.ANAMNESE -> Evolui.Cyan
+    HealthType.OFTALMOLOGIA -> Evolui.Cyan
 }
 
 fun HealthType.icon(): ImageVector = when (this) {
@@ -94,6 +96,7 @@ fun HealthType.icon(): ImageVector = when (this) {
     HealthType.TRATAMENTO -> Icons.Filled.Healing
     HealthType.BIOIMPEDANCIA -> Icons.Filled.MonitorWeight
     HealthType.ANAMNESE -> Icons.Filled.ContentPaste
+    HealthType.OFTALMOLOGIA -> Icons.Filled.Visibility
 }
 
 val CalendarIcon: ImageVector get() = Icons.Filled.CalendarMonth

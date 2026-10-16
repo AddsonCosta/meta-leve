@@ -16,8 +16,8 @@ android {
         applicationId = "com.evolui.myapp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.4.0"
     }
 
     // Assinatura de release opcional, lida de variáveis de ambiente (CI).
@@ -86,6 +86,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.health.connect)
     implementation(libs.mlkit.text.recognition)
+    implementation(libs.mlkit.image.labeling)
     implementation(libs.profileinstaller)
 
     testImplementation(libs.junit)

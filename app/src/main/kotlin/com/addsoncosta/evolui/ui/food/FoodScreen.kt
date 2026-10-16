@@ -70,9 +70,17 @@ fun FoodScreen() {
     val vm: FoodViewModel = viewModel(factory = viewModelFactory { initializer { FoodViewModel(container) } })
     var editor by remember { mutableStateOf<SavedMealDraft?>(null) }
     var picking by remember { mutableStateOf(false) }
+    var photo by remember { mutableStateOf(false) }
     val draft = editor
 
     when {
+        photo -> PhotoMealScreen(
+            vm = vm,
+            onClose = {
+                photo = false
+                vm.query.value = ""
+            },
+        )
         draft != null && picking -> FoodPicker(
             vm = vm,
             onBack = {
@@ -103,15 +111,15 @@ fun FoodScreen() {
             },
             onClose = { editor = null },
         )
-        else -> FoodHome(vm = vm, onOpenEditor = { editor = it })
+        else -> FoodHome(vm = vm, onOpenEditor = { editor = it }, onOpenPhoto = { photo = true })
     }
 }
 
-private fun dayLabel(date: LocalDate) = if (date == LocalDate.now()) "hoje" else date.format(DayFormat)
+internal fun dayLabel(date: LocalDate) = if (date == LocalDate.now()) "hoje" else date.format(DayFormat)
 
 /** Tela principal: busca, refeições salvas, água e lista de alimentos. */
 @Composable
-private fun FoodHome(vm: FoodViewModel, onOpenEditor: (SavedMealDraft) -> Unit) {
+private fun FoodHome(vm: FoodViewModel, onOpenEditor: (SavedMealDraft) -> Unit, onOpenPhoto: () -> Unit) {
     val context = LocalContext.current
     val query by vm.query.collectAsStateWithLifecycle()
     val date by vm.date.collectAsStateWithLifecycle()
@@ -144,6 +152,7 @@ private fun FoodHome(vm: FoodViewModel, onOpenEditor: (SavedMealDraft) -> Unit) 
             modifier = Modifier.weight(1f),
             header = {
                 if (query.isBlank()) {
+                    item(key = "foto") { PhotoMealCard(onOpen = onOpenPhoto, modifier = Modifier.padding(bottom = 12.dp)) }
                     item(key = "salvas") {
                         SavedMealsPanel(
                             meals = savedMeals,
@@ -251,11 +260,11 @@ private fun FoodPicker(vm: FoodViewModel, onBack: () -> Unit, onAdd: (SavedMealI
 }
 
 @Composable
-private fun SearchField(query: String, onChange: (String) -> Unit) {
+internal fun SearchField(query: String, onChange: (String) -> Unit) {
     OutlinedTextField(
         value = query,
         onValueChange = onChange,
-        placeholder = { Text("Buscar (ex.: arroz, tapioca, frango)") },
+        placeholder = { Text("Buscar (ex.: arroz, peixe, fruta)") },
         leadingIcon = { Icon(Icons.Filled.Search, null) },
         trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { onChange("") }) { Icon(Icons.Filled.Clear, "Limpar") } },
         singleLine = true,
@@ -268,7 +277,7 @@ private fun SearchField(query: String, onChange: (String) -> Unit) {
  * (com filtro por categoria). Com texto: os resultados da busca.
  */
 @Composable
-private fun FoodList(
+internal fun FoodList(
     vm: FoodViewModel,
     query: String,
     onFood: (FoodEntity) -> Unit,

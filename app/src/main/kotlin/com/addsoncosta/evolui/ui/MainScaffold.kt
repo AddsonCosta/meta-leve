@@ -1,5 +1,7 @@
 package com.addsoncosta.evolui.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsRun
@@ -17,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -31,6 +34,8 @@ import com.addsoncosta.evolui.ui.food.FoodScreen
 import com.addsoncosta.evolui.ui.health.HealthScreen
 import com.addsoncosta.evolui.ui.progress.ProgressScreen
 import com.addsoncosta.evolui.ui.settings.SettingsScreen
+import com.addsoncosta.evolui.ui.theme.Section
+import com.addsoncosta.evolui.ui.theme.ThemeBackdrop
 import com.addsoncosta.evolui.ui.today.TodayScreen
 
 private enum class Tab(val route: String, val label: String, val icon: ImageVector) {
@@ -48,6 +53,19 @@ private object Routes {
     const val BADGES = "conquistas"
 }
 
+/** Seção de cada rota, para a ilustração do fundo. */
+private fun sectionOf(route: String?): Section? = when (route) {
+    null, Tab.TODAY.route -> Section.TODAY
+    Tab.FOOD.route -> Section.FOOD
+    Tab.EXERCISE.route -> Section.EXERCISE
+    Tab.FASTING.route -> Section.FASTING
+    Tab.HEALTH.route -> Section.HEALTH
+    Routes.PROGRESS -> Section.PROGRESS
+    Routes.BADGES -> Section.BADGES
+    Routes.SETTINGS -> Section.SETTINGS
+    else -> null
+}
+
 @Composable
 fun MainScaffold() {
     val nav = rememberNavController()
@@ -62,49 +80,54 @@ fun MainScaffold() {
     fun open(route: String) = nav.navigate(route) { launchSingleTop = true }
     val back: () -> Unit = { nav.popBackStack() }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        bottomBar = {
-            if (Tab.entries.any { it.route == current }) {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                    Tab.entries.forEach { tab ->
-                        NavigationBarItem(
-                            selected = current == tab.route,
-                            onClick = { go(tab.route) },
-                            icon = { Icon(tab.icon, contentDescription = null) },
-                            label = { Text(tab.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
-                                indicatorColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                            ),
-                        )
+    // Fundo do tema (padrão + ilustração da seção) por baixo de todas as telas.
+    Box(Modifier.fillMaxSize()) {
+        ThemeBackdrop(sectionOf(current), Modifier.fillMaxSize())
+        Scaffold(
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onBackground,
+            bottomBar = {
+                if (Tab.entries.any { it.route == current }) {
+                    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                        Tab.entries.forEach { tab ->
+                            NavigationBarItem(
+                                selected = current == tab.route,
+                                onClick = { go(tab.route) },
+                                icon = { Icon(tab.icon, contentDescription = null) },
+                                label = { Text(tab.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                    indicatorColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                ),
+                            )
+                        }
                     }
                 }
+            },
+        ) { padding ->
+            NavHost(nav, startDestination = Tab.TODAY.route, modifier = Modifier.padding(padding)) {
+                composable(Tab.TODAY.route) {
+                    TodayScreen(
+                        onAddFood = { go(Tab.FOOD.route) },
+                        onAddExercise = { go(Tab.EXERCISE.route) },
+                        onOpenSettings = { open(Routes.SETTINGS) },
+                        onOpenProgress = { open(Routes.PROGRESS) },
+                        onOpenBadges = { open(Routes.BADGES) },
+                        onOpenFasting = { go(Tab.FASTING.route) },
+                        onOpenHealth = { go(Tab.HEALTH.route) },
+                    )
+                }
+                composable(Tab.FOOD.route) { FoodScreen() }
+                composable(Tab.EXERCISE.route) { ExerciseScreen() }
+                composable(Tab.FASTING.route) { FastingScreen() }
+                composable(Tab.HEALTH.route) {
+                    HealthScreen(onOpenProgress = { open(Routes.PROGRESS) }, onOpenBadges = { open(Routes.BADGES) })
+                }
+                composable(Routes.PROGRESS) { ProgressScreen(onBack = back) }
+                composable(Routes.BADGES) { BadgesScreen(onBack = back) }
+                composable(Routes.SETTINGS) { SettingsScreen(onBack = back) }
             }
-        },
-    ) { padding ->
-        NavHost(nav, startDestination = Tab.TODAY.route, modifier = Modifier.padding(padding)) {
-            composable(Tab.TODAY.route) {
-                TodayScreen(
-                    onAddFood = { go(Tab.FOOD.route) },
-                    onAddExercise = { go(Tab.EXERCISE.route) },
-                    onOpenSettings = { open(Routes.SETTINGS) },
-                    onOpenProgress = { open(Routes.PROGRESS) },
-                    onOpenBadges = { open(Routes.BADGES) },
-                    onOpenFasting = { go(Tab.FASTING.route) },
-                    onOpenHealth = { go(Tab.HEALTH.route) },
-                )
-            }
-            composable(Tab.FOOD.route) { FoodScreen() }
-            composable(Tab.EXERCISE.route) { ExerciseScreen() }
-            composable(Tab.FASTING.route) { FastingScreen() }
-            composable(Tab.HEALTH.route) {
-                HealthScreen(onOpenProgress = { open(Routes.PROGRESS) }, onOpenBadges = { open(Routes.BADGES) })
-            }
-            composable(Routes.PROGRESS) { ProgressScreen(onBack = back) }
-            composable(Routes.BADGES) { BadgesScreen(onBack = back) }
-            composable(Routes.SETTINGS) { SettingsScreen(onBack = back) }
         }
     }
 }

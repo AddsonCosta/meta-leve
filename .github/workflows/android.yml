@@ -23,7 +23,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Testes dos cálculos
-        run: set -o pipefail; ./gradlew :core:test --stacktrace 2>&1 | tee -a build.log
+        run: set -o pipefail; ./gradlew :core:test :app:testDebugUnitTest --stacktrace 2>&1 | tee -a build.log
 
       - name: APK de debug
         run: set -o pipefail; ./gradlew :app:assembleDebug --stacktrace 2>&1 | tee -a build.log
@@ -54,7 +54,7 @@ jobs:
       # Esquema do banco gerado pelo Room, para conferir as migrações.
       - name: Mostrar esquema do banco
         if: always()
-        run: find app/schemas -name '3.json' -print -exec cat {} \; || true
+        run: find app/schemas -name '4.json' -print -exec cat {} \; || true
 
       - uses: actions/upload-artifact@v4
         with:

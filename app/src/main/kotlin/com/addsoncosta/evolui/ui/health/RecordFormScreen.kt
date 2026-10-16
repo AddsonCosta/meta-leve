@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -60,12 +63,15 @@ import com.addsoncosta.evolui.data.HealthType
 import com.addsoncosta.evolui.data.LabResultEntity
 import com.addsoncosta.evolui.data.Repository
 import com.addsoncosta.evolui.health.Attachments
+import com.addsoncosta.evolui.health.EyeExam
+import com.addsoncosta.evolui.health.EyeParser
 import com.addsoncosta.evolui.health.FieldKind
 import com.addsoncosta.evolui.health.HealthFields
 import com.addsoncosta.evolui.health.LabCatalog
 import com.addsoncosta.evolui.health.LabItem
 import com.addsoncosta.evolui.health.ParsedExam
 import com.addsoncosta.evolui.health.PendingFile
+import com.addsoncosta.evolui.health.ReportSummary
 import com.addsoncosta.evolui.ui.appContainer
 import com.addsoncosta.evolui.ui.components.NumberField
 import com.addsoncosta.evolui.ui.components.Overline
@@ -124,6 +130,10 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
     var confirmExit by remember { mutableStateOf(false) }
     var addItem by remember { mutableStateOf(false) }
     var suggestions by remember { mutableStateOf<ParsedExam?>(null) }
+    var eyeSuggestion by remember { mutableStateOf<EyeExam?>(null) }
+    var reportSuggestion by remember { mutableStateOf<ReportSummary?>(null) }
+    // Exame de imagem ou procedimento: guarda só o resumo do laudo, sem tabela de valores.
+    val reportExam = type == HealthType.EXAME && extras[HealthFields.EXAM_KIND] == HealthFields.EXAM_KIND_REPORT
 
     fun newRow(item: LabItem?, name: String, value: String = ""): LabRow {
         val row = LabRow(key = nextKey, analyte = item?.name ?: name, value = value, unit = item?.unit ?: "")
@@ -181,9 +191,20 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
     }
     BackHandler { requestExit() }
 
-    val importer = rememberFileImporter(type) { file, parsed ->
+    val importer = rememberHealthImporter(type, reportExam) { file, data ->
         pending += file
-        if (parsed != null && !parsed.isEmpty) suggestions = parsed
+        val eye = data.eye
+        val report = data.report
+        val parsed = data.exam
+        when {
+            eye != null && !eye.isEmpty -> eyeSuggestion = eye
+            report != null && !report.isEmpty -> {
+                // Laudo de imagem reconhecido: muda o formulário para o modo laudo.
+                extras[HealthFields.EXAM_KIND] = HealthFields.EXAM_KIND_REPORT
+                reportSuggestion = report
+            }
+            parsed != null && !parsed.isEmpty -> suggestions = parsed
+        }
     }
 
     fun save() {
@@ -234,16 +255,50 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
                 IconButton(onClick = { save() }) { Icon(Icons.Filled.Check, "Salvar") }
             }
         }
+        if (type == HealthType.EXAME) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Tipo de exame", fontWeight = FontWeight.Bold)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = !reportExam, onClick = { extras.remove(HealthFields.EXAM_KIND) }, label = { Text("Sangue, urina... (valores)") })
+                        FilterChip(
+                            selected = reportExam,
+                            onClick = { extras[HealthFields.EXAM_KIND] = HealthFields.EXAM_KIND_REPORT },
+                            label = { Text("Imagem ou laudo") },
+                        )
+                    }
+                    Text(
+                        if (reportExam) "Ultrassom, ressonância, tomografia, raio-X, ecocardiograma, endoscopia, biópsia, mamografia..."
+                        else "Exames com tabela de resultados, como hemograma e colesterol.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
         // Ler de arquivo.
         item {
             Panel {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Icon(Icons.Filled.DocumentScanner, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(if (spec.hasValues) "Ler dados do laudo" else "Anexar arquivo", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            if (spec.hasValues) "Escolha o PDF ou a foto do laudo. O app lê o texto no próprio celular e sugere a data, o laboratório e os valores para você conferir."
-                            else "Receita, pedido, relatório... em PDF ou foto (JPG, PNG, WEBP, HEIC). Fica guardado só no celular.",
+                            when {
+                                reportExam -> "Anexe o laudo"
+                                type == HealthType.OFTALMOLOGIA -> "Ler a receita de óculos"
+                                spec.hasValues -> "Ler dados do laudo"
+                                else -> "Anexar arquivo"
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            when {
+                                reportExam -> "Escolha o PDF ou a foto do laudo. O app guarda só o essencial (exame, data, local, médico e a conclusão) e o arquivo completo fica anexado."
+                                type == HealthType.OFTALMOLOGIA -> "Escolha o PDF ou a foto da receita. O app lê o grau de cada olho (OD e OE), a acuidade, a pressão do olho e os diagnósticos para você conferir."
+                                type == HealthType.BIOIMPEDANCIA -> "Escolha o PDF ou a foto do resultado. O app pega só o essencial: peso, % de gordura, massa muscular, água, gordura visceral, TMB, idade metabólica e IMC."
+                                spec.hasValues -> "Escolha o PDF ou a foto do laudo. O app lê o texto no próprio celular e sugere a data, o laboratório e os valores para você conferir."
+                                else -> "Receita, pedido, relatório... em PDF ou foto (JPG, PNG, WEBP, HEIC). Fica guardado só no celular."
+                            },
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodyMedium,
                         )
@@ -255,7 +310,7 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
                         Text("  Lendo o arquivo…")
                     } else {
                         Icon(Icons.Filled.AttachFile, null)
-                        Text("  Escolher PDF ou foto")
+                        Text(if (reportExam) "  Anexar o laudo (PDF ou foto)" else "  Escolher PDF ou foto")
                     }
                 }
                 pending.forEach { f ->
@@ -280,21 +335,27 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
                 epochDay = day,
                 onChange = { it?.let { d -> day = d } },
                 help = when (type) {
-                    HealthType.EXAME -> "Dia da coleta do exame"
+                    HealthType.EXAME -> if (reportExam) "Dia em que o exame foi feito" else "Dia da coleta do exame"
+                    HealthType.OFTALMOLOGIA -> "Dia da consulta ou da receita"
                     HealthType.MEDICACAO -> "Dia em que você anotou ou recebeu a receita"
                     else -> "Dia do atendimento"
                 },
             )
         }
-        item { HelpField(title, { title = it }, spec.titleLabel, spec.titleHelp) }
+        item {
+            HelpField(
+                title, { title = it }, spec.titleLabel,
+                if (reportExam) "Ex.: Ultrassonografia de abdome total, ressonância do joelho" else spec.titleHelp,
+            )
+        }
         item {
             Column {
                 HelpField(
                     place,
                     { place = it; placeError = false },
-                    spec.placeLabel,
-                    spec.placeHelp,
-                    error = if (placeError) "Diga em que laboratório o exame foi feito" else null,
+                    if (reportExam) "Clínica ou laboratório *" else spec.placeLabel,
+                    if (reportExam) "Onde o exame foi feito. Ex.: Clínica Imagem Total" else spec.placeHelp,
+                    error = if (placeError) "Diga em que ${if (reportExam) "clínica ou laboratório" else "laboratório"} o exame foi feito" else null,
                 )
                 Suggestions(places, place) { place = it; placeError = false }
             }
@@ -305,7 +366,26 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
                 Suggestions(professionals, professional) { professional = it }
             }
         }
-        items(spec.extras, key = { it.key }) { f ->
+        if (type == HealthType.OFTALMOLOGIA) {
+            item(key = "eyes") {
+                EyeFields(values = extras, onChange = { k, v -> if (v.isBlank()) { extras.remove(k) } else { extras[k] = v } })
+            }
+            item(key = "eye_diagnoses") {
+                EyeDiagnoses(
+                    value = extras[HealthFields.EYE_DIAGNOSES].orEmpty(),
+                    onChange = { v ->
+                        if (v.isBlank()) {
+                            extras.remove(HealthFields.EYE_DIAGNOSES)
+                        } else {
+                            extras[HealthFields.EYE_DIAGNOSES] = v
+                        }
+                    },
+                )
+            }
+        }
+        val formExtras = spec.extras.filter { !HealthFields.isEyeKey(it.key) && it.key != HealthFields.EYE_DIAGNOSES } +
+            if (reportExam) HealthFields.reportFields else emptyList()
+        items(formExtras, key = { it.key }) { f ->
             val v = extras[f.key].orEmpty()
             when (f.kind) {
                 FieldKind.DATE -> DateField(
@@ -341,7 +421,7 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
         }
         item { HelpField(description, { description = it }, spec.descriptionLabel, spec.descriptionHelp, multiline = true) }
 
-        if (spec.hasValues) {
+        if (spec.hasValues && !reportExam) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     HorizontalDivider()
@@ -392,6 +472,30 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
             text = { Text("O que você preencheu será perdido.") },
             confirmButton = { TextButton(onClick = { confirmExit = false; onBack() }) { Text("Sair sem salvar", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { confirmExit = false; save() }) { Text("Salvar") } },
+        )
+    }
+    eyeSuggestion?.let { eye ->
+        EyeSuggestionsDialog(
+            eye = eye,
+            onApply = { date, values ->
+                date?.let { day = it.toEpochDay() }
+                extras.putAll(values)
+            },
+            onDismiss = { eyeSuggestion = null },
+        )
+    }
+    reportSuggestion?.let { rep ->
+        ReportSuggestionsDialog(
+            summary = rep,
+            onApply = { s ->
+                s.date?.let { day = it.toEpochDay() }
+                s.examName?.let { if (title.isBlank() || title == type.singular) title = it }
+                s.place?.let { if (place.isBlank()) { place = it; placeError = false } }
+                s.requestingDoctor?.let { if (professional.isBlank()) professional = it }
+                s.reportingDoctor?.let { extras[HealthFields.REPORT_DOCTOR] = it }
+                s.conclusion?.let { extras[HealthFields.REPORT_CONCLUSION] = it }
+            },
+            onDismiss = { reportSuggestion = null },
         )
     }
     if (addItem) {
@@ -519,4 +623,61 @@ private fun AddItemDialog(items: List<LabItem>, present: Set<String>, onPick: (L
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Fechar") } },
     )
+}
+
+/** Grau e medidas de cada olho, lado a lado: OD (direito) e OE (esquerdo). */
+@Composable
+private fun EyeFields(values: Map<String, String>, onChange: (String, String) -> Unit) {
+    Panel {
+        Overline("Receita e exame dos olhos")
+        Text(
+            "OD = olho direito, OE = olho esquerdo. Use vírgula e o sinal: -2,00 ou +1,25. Deixe vazio o que não tiver.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        HealthFields.eyeMeasures.forEach { m ->
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(m.label + (m.unit?.let { " ($it)" } ?: ""), fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("od" to "OD", "oe" to "OE").forEach { (eye, label) ->
+                        val key = HealthFields.eyeKey(eye, m.key)
+                        OutlinedTextField(
+                            value = values[key].orEmpty(),
+                            onValueChange = { onChange(key, it) },
+                            label = { Text(label) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                Text(m.help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+/** Diagnósticos dos olhos em chips (miopia, glaucoma...). Guardados como texto separado por vírgula. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EyeDiagnoses(value: String, onChange: (String) -> Unit) {
+    val selected = value.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Diagnósticos", fontWeight = FontWeight.Bold)
+        Text(
+            "Toque nos que o médico citou. Outros vão no campo \"Outros diagnósticos e orientações\".",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        val names = EyeParser.knownDiagnoses.map { it.first }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            (names + selected.filter { it !in names }).forEach { d ->
+                val on = d in selected
+                FilterChip(
+                    selected = on,
+                    onClick = { onChange((if (on) selected - d else selected + d).joinToString(", ")) },
+                    label = { Text(d) },
+                )
+            }
+        }
+    }
 }
