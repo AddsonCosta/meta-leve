@@ -219,6 +219,7 @@ class Repository(private val context: Context, private val db: AppDatabase) {
             conditions = db.healthConditionDao().all(),
             teeth = db.toothStateDao().all(),
             cycles = db.menstrualCycleDao().all(),
+            bloodPressure = db.bloodPressureDao().all(),
         )
         json.encodeToString(Backup.serializer(), backup)
     }
@@ -295,6 +296,7 @@ class Repository(private val context: Context, private val db: AppDatabase) {
             db.healthConditionDao().clear()
             db.toothStateDao().clear()
             db.menstrualCycleDao().clear()
+            db.bloodPressureDao().clear()
             // Fotos: backups antigos (só .json) não trazem as fotos; nesse caso mantém as atuais.
             if (backup.version >= 3) db.photoDao().clear()
 
@@ -318,6 +320,7 @@ class Repository(private val context: Context, private val db: AppDatabase) {
             db.healthConditionDao().insertAll(backup.conditions)
             db.toothStateDao().saveAll(backup.teeth)
             db.menstrualCycleDao().insertAll(backup.cycles)
+            db.bloodPressureDao().insertAll(backup.bloodPressure)
         }
     }
 
@@ -371,6 +374,7 @@ data class Backup(
     val conditions: List<HealthConditionEntity> = emptyList(),
     val teeth: List<ToothStateEntity> = emptyList(),
     val cycles: List<MenstrualCycleEntity> = emptyList(),
+    val bloodPressure: List<BloodPressureEntity> = emptyList(),
 ) {
     companion object {
         const val VERSION = 3

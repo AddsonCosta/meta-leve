@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -158,10 +157,8 @@ private fun BadgeTile(st: BadgeStatus, onClick: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Box(contentAlignment = Alignment.BottomEnd) {
-                BadgeIcon(st.badge, earned)
-                if (!earned) Icon(Icons.Filled.Lock, "Bloqueada", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(0.dp))
-            }
+            // A medalha já mostra o cadeado quando está bloqueada.
+            BadgeIcon(st.badge, earned, size = 92)
             Text(
                 st.badge.name,
                 fontWeight = FontWeight.Bold,
@@ -169,6 +166,12 @@ private fun BadgeTile(st: BadgeStatus, onClick: () -> Unit) {
                 color = if (earned) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (earned) {
+                Text(
+                    st.badge.tier.label.uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Text(
                     st.earned!!.earnedDate().format(DateFormat),
                     style = MaterialTheme.typography.labelSmall,
@@ -196,10 +199,11 @@ private fun BadgeDetailDialog(st: BadgeStatus, onDismiss: () -> Unit) {
     val earned = st.earned
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = { BadgeIcon(st.badge, earned != null, size = 72) },
+        icon = { if (earned != null) CelebrationMedal(st.badge, size = 150) else BadgeIcon(st.badge, false, size = 120) },
         title = { Text(st.badge.name, textAlign = TextAlign.Center) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Medalha de ${st.badge.tier.label.lowercase()}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(st.badge.description)
                 if (earned != null) {
                     Text("Conquistada em ${earned.earnedDate().format(DateFormat)}", fontWeight = FontWeight.Bold, color = st.badge.color.themed())

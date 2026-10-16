@@ -27,6 +27,14 @@ interface FoodDao {
     @Query("SELECT * FROM food WHERE searchName LIKE '%' || :token || '%' ORDER BY favorite DESC, searchName LIMIT 400")
     fun searchToken(token: String): Flow<List<FoodEntity>>
 
+    /** Alimentos de algumas categorias (busca por palavra geral, ex.: "peixe" → "Pescados e frutos do mar"). */
+    @Query("SELECT * FROM food WHERE category IN (:categories) ORDER BY favorite DESC, searchName LIMIT 400")
+    fun inCategories(categories: List<String>): Flow<List<FoodEntity>>
+
+    /** Alimentos pelo nome exato sem acento (sugestões da foto do prato, prato típico). */
+    @Query("SELECT * FROM food WHERE searchName IN (:names)")
+    suspend fun byNames(names: List<String>): List<FoodEntity>
+
     /** Lista em ordem alfabética (sem acento), opcionalmente de uma categoria. */
     @Query("SELECT * FROM food WHERE (:category IS NULL OR category = :category) ORDER BY searchName")
     fun observeBrowse(category: String?): Flow<List<FoodEntity>>

@@ -96,6 +96,7 @@ private fun titleSuggestions(type: HealthType): List<String> = when (type) {
     HealthType.TRATAMENTO -> listOf("Sessão de tratamento", "Acupuntura", "Curativo", "Vacina")
     HealthType.BIOIMPEDANCIA -> listOf("Bioimpedância")
     HealthType.ANAMNESE -> emptyList()
+    HealthType.OFTALMOLOGIA -> listOf("Consulta oftalmologista", "Exame de vista", "Mapeamento de retina", "Medir pressão do olho")
 }
 
 @Composable

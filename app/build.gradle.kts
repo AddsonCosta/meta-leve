@@ -86,6 +86,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.health.connect)
     implementation(libs.mlkit.text.recognition)
+    implementation(libs.mlkit.image.labeling)
     implementation(libs.profileinstaller)
 
     testImplementation(libs.junit)

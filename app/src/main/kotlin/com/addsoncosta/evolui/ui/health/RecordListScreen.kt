@@ -123,6 +123,7 @@ fun RecordListScreen(
                         Text("  Comparar e ver gráficos", fontWeight = FontWeight.Bold)
                     }
                 }
+                HealthType.OFTALMOLOGIA -> item { LastEyeVisit(records) }
                 else -> {}
             }
             if (records.isNotEmpty()) {
@@ -174,6 +175,7 @@ private fun emptyHelp(type: HealthType): String = when (type) {
     HealthType.EXAME -> "Cadastre seus exames com o laboratório e os valores. Tire uma foto do laudo ou escolha o PDF: o app tenta ler os valores sozinho para você conferir."
     HealthType.MEDICACAO -> "Anote os remédios que toma ou já tomou: dose, horários, início e fim."
     HealthType.ODONTOLOGIA -> "Registre limpezas, restaurações e tratamentos. Use a arcada dentária para descrever cada dente."
+    HealthType.OFTALMOLOGIA -> "Guarde cada consulta com o oftalmologista: o grau de cada olho, a acuidade, a pressão do olho e os diagnósticos. Tire uma foto da receita de óculos ou escolha o PDF: o app tenta ler os valores para você conferir."
     HealthType.BIOIMPEDANCIA -> "Registre os resultados da bioimpedância (peso, % de gordura, massa muscular...) para comparar ao longo do tempo."
     else -> "Registre as sessões, o objetivo e como está a evolução. Pode anexar documentos em foto ou PDF."
 }
@@ -190,12 +192,23 @@ private fun RecordRow(r: HealthRecordEntity, type: HealthType, files: Int, onCli
                 val line = when (type) {
                     HealthType.MEDICACAO -> listOfNotNull(extra["dose"], extra["frequencia"])
                     HealthType.CONSULTA -> listOfNotNull(r.professional, extra["especialidade"])
-                    HealthType.EXAME -> listOfNotNull(r.place?.let { "Lab.: $it" })
+                    HealthType.EXAME -> listOfNotNull(r.place?.let { if (HealthFields.isReportExam(extra)) it else "Lab.: $it" })
+                    HealthType.OFTALMOLOGIA -> listOfNotNull(
+                        eyeLine("OD", extra, "od"),
+                        eyeLine("OE", extra, "oe"),
+                    )
                     HealthType.ODONTOLOGIA -> listOfNotNull(extra["procedimento"], extra["dentes"]?.let { "dentes $it" })
                     else -> listOfNotNull(r.professional, r.place)
                 }.filter { it.isNotBlank() }.joinToString(" · ")
                 if (line.isNotBlank()) Text(line, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                r.description?.takeIf { it.isNotBlank() }?.let {
+                val conclusion = extra[HealthFields.REPORT_CONCLUSION]?.takeIf { type == HealthType.EXAME && it.isNotBlank() }
+                if (conclusion != null) {
+                    Text("Conclusão: $conclusion", style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                }
+                if (type == HealthType.OFTALMOLOGIA) extra[HealthFields.EYE_DIAGNOSES]?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                r.description?.takeIf { it.isNotBlank() && conclusion == null }?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
@@ -208,6 +221,47 @@ private fun RecordRow(r: HealthRecordEntity, type: HealthType, files: Int, onCli
                     }
                 }
             }
+        }
+    }
+}
+
+/** "OD -2,00 -0,75 x 180°", ou nulo se o olho não tem grau anotado. */
+private fun eyeLine(label: String, extra: Map<String, String>, eye: String): String? {
+    fun v(k: String) = extra[HealthFields.eyeKey(eye, k)]?.takeIf { it.isNotBlank() }
+    val text = listOfNotNull(v("esferico"), v("cilindrico"), v("eixo")?.let { "x $it°" }).joinToString(" ")
+    return if (text.isBlank()) null else "$label $text"
+}
+
+/** Destaque da Oftalmologia: data da última consulta, há quantos dias, e a próxima, se marcada. */
+@Composable
+private fun LastEyeVisit(records: List<HealthRecordEntity>) {
+    val last = records.maxByOrNull { it.epochDay }
+    val today = LocalDate.now().toEpochDay()
+    Panel {
+        Overline("Última consulta")
+        if (last == null) {
+            Text("Nenhuma consulta registrada", style = MaterialTheme.typography.titleLarge)
+            Text("O ideal é ir ao oftalmologista uma vez por ano.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            val days = today - last.epochDay
+            Text(dayText(last.epochDay), style = MaterialTheme.typography.headlineSmall, color = HealthType.OFTALMOLOGIA.color(), fontWeight = FontWeight.Bold)
+            Text(
+                when {
+                    days < 0 -> "Daqui a ${-days} ${if (days == -1L) "dia" else "dias"}"
+                    days == 0L -> "Hoje"
+                    days == 1L -> "Há 1 dia"
+                    days < 60 -> "Há $days dias"
+                    days < 730 -> "Há $days dias (cerca de ${days / 30} meses)"
+                    else -> "Há $days dias (cerca de ${days / 365} anos)"
+                },
+                style = MaterialTheme.typography.titleMedium,
+            )
+            if (days > 365) {
+                Text("Já passou de um ano. Que tal marcar uma nova consulta?", color = Evolui.Orange)
+            }
+            val next = records.mapNotNull { HealthRepository.parseDate(HealthRepository.decodeExtra(it.extra)["proxima"]) }
+                .filter { it.toEpochDay() >= today }.minOrNull()
+            if (next != null) Text("Próxima consulta: ${dayText(next.toEpochDay())}", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

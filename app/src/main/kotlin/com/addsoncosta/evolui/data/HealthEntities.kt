@@ -17,6 +17,7 @@ enum class HealthType(val label: String, val singular: String) {
     TRATAMENTO("Tratamentos", "Tratamento"),
     BIOIMPEDANCIA("Bioimpedância", "Bioimpedância"),
     ANAMNESE("Anamnese", "Anamnese"),
+    OFTALMOLOGIA("Oftalmologia", "Consulta oftalmológica"),
 }
 
 /**

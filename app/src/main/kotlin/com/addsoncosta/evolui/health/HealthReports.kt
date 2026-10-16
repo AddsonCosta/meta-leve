@@ -3,12 +3,11 @@ package com.addsoncosta.evolui.health
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.RectF
-import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import androidx.compose.ui.graphics.toArgb
 import com.addsoncosta.evolui.EvoluiApp
 import com.addsoncosta.evolui.core.EnergyCalculator
 import com.addsoncosta.evolui.core.Profile
@@ -23,6 +22,11 @@ import com.addsoncosta.evolui.data.LabResultEntity
 import com.addsoncosta.evolui.data.MenstrualCycleEntity
 import com.addsoncosta.evolui.data.Repository
 import com.addsoncosta.evolui.data.ToothStateEntity
+import com.addsoncosta.evolui.ui.share.drawShareBackground
+import com.addsoncosta.evolui.ui.share.shareCardColor
+import com.addsoncosta.evolui.ui.theme.Evolui
+import com.addsoncosta.evolui.ui.theme.Palette
+import com.addsoncosta.evolui.ui.theme.Section as ThemeSection
 import java.io.File
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -46,6 +50,7 @@ enum class ReportArea(val label: String) {
     TRATAMENTO("Tratamentos"),
     BIOIMPEDANCIA("Bioimpedância"),
     ANAMNESE("Anamnese"),
+    OFTALMOLOGIA("Oftalmologia"),
     CALENDARIO("Calendário de saúde"),
     CICLO("Ciclo menstrual"),
 }
@@ -129,7 +134,8 @@ object HealthReports {
     /** Cartão-resumo da área em imagem (1080 px de largura). */
     suspend fun image(context: Context, area: ReportArea): Bitmap {
         val report = build(load(context), area)
-        return withContext(Dispatchers.Default) { renderImage(report) }
+        val palette = Evolui.palette
+        return withContext(Dispatchers.Default) { renderImage(report, palette) }
     }
 
     /** PDF de um registro só (uma consulta, um exame...). */
@@ -142,7 +148,8 @@ object HealthReports {
 
     suspend fun recordImage(context: Context, recordId: Long): Bitmap {
         val report = buildRecord(load(context), recordId)
-        return withContext(Dispatchers.Default) { renderImage(report) }
+        val palette = Evolui.palette
+        return withContext(Dispatchers.Default) { renderImage(report, palette) }
     }
 
     // ---------- Dados ----------
@@ -184,6 +191,7 @@ object HealthReports {
             ReportArea.FISIOTERAPIA -> history(d, HealthType.FISIOTERAPIA)
             ReportArea.TERAPIA -> history(d, HealthType.TERAPIA)
             ReportArea.TRATAMENTO -> history(d, HealthType.TRATAMENTO)
+            ReportArea.OFTALMOLOGIA -> listOfNotNull(lastEyeVisit(d)) + history(d, HealthType.OFTALMOLOGIA)
         }
         return Report(area.label, patientLine(d), sections)
     }
@@ -234,7 +242,9 @@ object HealthReports {
             val bad = res.filter { LabCatalog.status(it, d.sex) != 0 }
             buildList<Item> {
                 add(Sub("${day(r.epochDay)} — ${r.title}" + (r.place?.takeIf { it.isNotBlank() }?.let { " (laboratório $it)" } ?: "")))
+                val conclusion = HealthRepository.decodeExtra(r.extra)[HealthFields.REPORT_CONCLUSION]?.takeIf { it.isNotBlank() }
                 when {
+                    res.isEmpty() && conclusion != null -> add(KV("Conclusão do laudo", conclusion))
                     res.isEmpty() -> add(Para("Sem valores cadastrados.", muted = true))
                     bad.isEmpty() -> add(Para("Todos os ${res.size} valores dentro da referência."))
                     else -> {
@@ -249,6 +259,8 @@ object HealthReports {
             val res = d.resultsOf(r.id)
             if (res.isNotEmpty()) out += Section("Bioimpedância mais recente (${day(r.epochDay)})", listOf(valuesTable(res, d.sex)))
         }
+
+        lastEyeVisit(d)?.let { out += it }
 
         val ongoingTypes = listOf(HealthType.TRATAMENTO, HealthType.TERAPIA, HealthType.FISIOTERAPIA, HealthType.NUTRICAO)
         val ongoing = ongoingTypes.flatMap { t -> d.of(t).filter { it.status == null || it.status == "Em andamento" }.take(3).map { t to it } }
@@ -396,7 +408,13 @@ object HealthReports {
         r.professional?.takeIf { it.isNotBlank() }?.let { items += KV(spec?.professionalLabel ?: "Profissional", it) }
         r.place?.takeIf { it.isNotBlank() }?.let { items += KV(spec?.placeLabel?.removeSuffix(" *") ?: "Local", it) }
         r.status?.takeIf { it.isNotBlank() }?.let { items += KV("Situação", it) }
-        if (type != HealthType.ANAMNESE) HealthRepository.decodeExtra(r.extra).forEach { (k, v) ->
+        val extra = HealthRepository.decodeExtra(r.extra)
+        // Laudo de imagem: a conclusão vem primeiro, em destaque.
+        extra[HealthFields.REPORT_CONCLUSION]?.takeIf { it.isNotBlank() }?.let { items += KV("Conclusão do laudo", it) }
+        if (type == HealthType.OFTALMOLOGIA) eyeTable(extra)?.let { items += it }
+        val hidden = setOf(HealthFields.EXAM_KIND, HealthFields.REPORT_CONCLUSION)
+        if (type != HealthType.ANAMNESE) extra.forEach { (k, v) ->
+            if (k in hidden || (type == HealthType.OFTALMOLOGIA && HealthFields.isEyeKey(k))) return@forEach
             val value = if (HealthFields.kind(type, k) == FieldKind.DATE) HealthRepository.parseDate(v)?.format(Br) ?: v else v
             items += KV(HealthFields.label(type, k), value)
         }
@@ -406,6 +424,36 @@ object HealthReports {
         val files = d.attachments.filter { it.recordId == r.id }
         if (files.isNotEmpty()) items += Para("Anexos: " + files.joinToString(", ") { it.originalName ?: it.fileName }, muted = true)
         return items
+    }
+
+    /** Grau e medidas de cada olho, OD e OE lado a lado. */
+    private fun eyeTable(extra: Map<String, String>): Table? {
+        val rows = HealthFields.eyeMeasures.mapNotNull { m ->
+            val od = extra[HealthFields.eyeKey("od", m.key)]?.takeIf { it.isNotBlank() }
+            val oe = extra[HealthFields.eyeKey("oe", m.key)]?.takeIf { it.isNotBlank() }
+            if (od == null && oe == null) null else listOf(m.label + (m.unit?.let { " ($it)" } ?: ""), od ?: "—", oe ?: "—")
+        }
+        if (rows.isEmpty()) return null
+        return Table(
+            header = listOf("Medida", "OD (direito)", "OE (esquerdo)"),
+            rows = rows,
+            warn = rows.map { listOf(false, false, false) },
+            kind = TableKind.PLAIN,
+            firstWeight = 1.4f,
+        )
+    }
+
+    /** Última consulta oftalmológica, há quantos dias, e o grau dela. Nulo se não houver. */
+    private fun lastEyeVisit(d: Data): Section? {
+        val r = d.of(HealthType.OFTALMOLOGIA).firstOrNull() ?: return null
+        val days = LocalDate.now().toEpochDay() - r.epochDay
+        val extra = HealthRepository.decodeExtra(r.extra)
+        val items = mutableListOf<Item>(KV("Última consulta", "${day(r.epochDay)} (há $days ${if (days == 1L) "dia" else "dias"})"))
+        r.professional?.takeIf { it.isNotBlank() }?.let { items += KV("Oftalmologista", it) }
+        eyeTable(extra)?.let { items += it }
+        extra[HealthFields.EYE_DIAGNOSES]?.takeIf { it.isNotBlank() }?.let { items += KV("Diagnósticos", it) }
+        HealthRepository.parseDate(extra["proxima"])?.let { items += KV("Próxima consulta", it.format(Br)) }
+        return Section("Oftalmologia", items)
     }
 
     private fun valuesTable(res: List<LabResultEntity>, sex: Sex?): Table = Table(
@@ -661,33 +709,30 @@ object HealthReports {
 
     // ---------- Imagem ----------
 
-    private fun renderImage(r: Report): Bitmap {
+    private fun renderImage(r: Report, palette: Palette): Bitmap {
         val w = 1080
-        val measured = drawImage(null, r, w, 0)
+        val measured = drawImage(null, r, w, 0, palette)
         val h = measured.coerceIn(1080, 3200)
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        drawImage(Canvas(bmp), r, w, h)
+        drawImage(Canvas(bmp), r, w, h, palette)
         return bmp
     }
 
     /** Desenha (ou só mede, com canvas nulo) o cartão-resumo. Devolve a altura usada. */
-    private fun drawImage(c: Canvas?, r: Report, w: Int, h: Int): Int {
-        val neon = 0xFF39FF88.toInt()
-        val cyan = 0xFF22D3EE.toInt()
-        val white = 0xFFF2F5F3.toInt()
-        val mutedC = 0xFF9AA8A2.toInt()
-        val red = 0xFFFF5C6C.toInt()
+    private fun drawImage(c: Canvas?, r: Report, w: Int, h: Int, palette: Palette): Int {
+        // Cores do tema escolhido pelo usuário.
+        val neon = palette.accent.toArgb()
+        val cyan = palette.accent2.toArgb()
+        val white = palette.text.toArgb()
+        val mutedC = palette.textMuted.toArgb()
+        val red = palette.danger.toArgb()
         fun p(size: Float, color: Int, bold: Boolean = false) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             textSize = size
             this.color = color
             typeface = Typeface.create(Typeface.SANS_SERIF, if (bold) Typeface.BOLD else Typeface.NORMAL)
         }
         val maxH = 3200f - 140f
-        if (c != null) {
-            c.drawColor(0xFF0B0F0E.toInt())
-            val glow = Paint().apply { shader = LinearGradient(0f, 0f, w.toFloat(), h * 0.5f, 0x5539FF88, 0x000B0F0E, Shader.TileMode.CLAMP) }
-            c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), glow)
-        }
+        if (c != null) drawShareBackground(c, w.toFloat(), h.toFloat(), palette, ThemeSection.HEALTH)
         val pad = 72f
         val width = w - pad * 2
         var y = pad + 50f
@@ -715,7 +760,7 @@ object HealthReports {
             if (cut) break
             y += 24f
             if (c != null && !cut) {
-                val card = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF141A18.toInt() }
+                val card = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = shareCardColor(palette) }
                 c.drawRoundRect(RectF(pad - 24f, y - 8f, w - pad + 24f, y + 4f), 4f, 4f, card)
             }
             line(s.heading, headP, maxLines = 2)

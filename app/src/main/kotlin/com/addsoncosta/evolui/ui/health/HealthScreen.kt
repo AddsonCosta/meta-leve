@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bloodtype
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PictureAsPdf
@@ -66,6 +67,9 @@ import com.addsoncosta.evolui.ui.health.care.AnamnesisScreen
 import com.addsoncosta.evolui.ui.health.care.CycleScreen
 import com.addsoncosta.evolui.ui.health.care.DentalScreen
 import com.addsoncosta.evolui.ui.health.care.HealthCalendarScreen
+import com.addsoncosta.evolui.ui.health.pressure.PressureScreen
+import com.addsoncosta.evolui.ui.health.pressure.pressureHubColor
+import com.addsoncosta.evolui.ui.health.pressure.pressureHubSubtitle
 import com.addsoncosta.evolui.ui.theme.Evolui
 import java.time.LocalDate
 import kotlinx.coroutines.launch
@@ -95,6 +99,7 @@ fun HealthScreen(onOpenProgress: () -> Unit, onOpenBadges: () -> Unit) {
         "anamnesis" -> AnamnesisScreen(onBack = { pop() })
         "dental" -> DentalScreen(onBack = { pop() })
         "cycle" -> CycleScreen(onBack = { pop() })
+        "pressure" -> PressureScreen(onBack = { pop() })
         "list" -> {
             val type = typeFrom(parts.getOrNull(1))
             RecordListScreen(
@@ -151,6 +156,7 @@ private fun HealthHub(onOpen: (String) -> Unit, onOpenProgress: () -> Unit, onOp
     val events by remember { db.healthEventDao().observeAll() }.collectAsStateWithLifecycle(initialValue = emptyList<HealthEventEntity>())
     val conditions by remember { db.healthConditionDao().observeAll() }.collectAsStateWithLifecycle(initialValue = emptyList<HealthConditionEntity>())
     val cycles by remember { db.menstrualCycleDao().observeAll() }.collectAsStateWithLifecycle(initialValue = emptyList<MenstrualCycleEntity>())
+    val lastPressure by remember { db.bloodPressureDao().observeLatest() }.collectAsStateWithLifecycle(initialValue = null)
 
     var query by rememberSaveable { mutableStateOf("") }
     var generating by remember { mutableStateOf(false) }
@@ -190,7 +196,8 @@ private fun HealthHub(onOpen: (String) -> Unit, onOpenProgress: () -> Unit, onOp
         add(HubCard("Anamnese", HealthType.ANAMNESE.icon(), Evolui.Cyan,
             if (conditions.isEmpty()) "Doenças e histórico de saúde" else "${conditions.size} ${if (conditions.size == 1) "condição" else "condições"}",
             "anamnesis"))
-        listOf(HealthType.CONSULTA, HealthType.EXAME, HealthType.BIOIMPEDANCIA, HealthType.MEDICACAO, HealthType.ODONTOLOGIA,
+        add(HubCard("Pressão arterial", Icons.Filled.Favorite, pressureHubColor(lastPressure) ?: Evolui.Red, pressureHubSubtitle(lastPressure), "pressure"))
+        listOf(HealthType.CONSULTA, HealthType.EXAME, HealthType.BIOIMPEDANCIA, HealthType.MEDICACAO, HealthType.ODONTOLOGIA, HealthType.OFTALMOLOGIA,
             HealthType.NUTRICAO, HealthType.FISIOTERAPIA, HealthType.TERAPIA, HealthType.TRATAMENTO).forEach { t ->
             add(HubCard(t.label, t.icon(), Color.Unspecified, summary(t), "list:${t.name}"))
         }

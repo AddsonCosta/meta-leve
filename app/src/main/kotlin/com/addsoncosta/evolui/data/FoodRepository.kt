@@ -5,9 +5,9 @@ import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.map
 
 /** Valores de um alimento para uma quantidade em gramas. */
 data class Nutrition(val kcal: Double, val protein: Double, val fat: Double, val carb: Double, val fiber: Double)
@@ -31,26 +31,68 @@ class FoodRepository(private val db: AppDatabase) {
     private val saved = db.savedMealDao()
 
     /**
-     * Busca por palavras em qualquer ordem e sem acento ("arroz cozido" acha "Arroz, tipo 1, cozido").
-     * Favoritos primeiro, depois os que começam com a primeira palavra, depois em ordem alfabética.
+     * Busca por palavras em qualquer ordem e sem acento ("arroz cozido" acha "Arroz, tipo 1, cozido"), aceitando
+     * plural e feminino ("bananas", "carne moida"). Palavras gerais ("peixe", "fruta", "doce", "frutos do mar") trazem
+     * também os alimentos do grupo (ver [FoodSynonyms]). Ordem: nome com as palavras exatas, nome com as palavras
+     * em outra forma, alimentos do grupo e, por último, nomes que só têm a palavra por acaso ("batata doce" em "doce").
+     * Dentro de cada parte: favoritos, os que começam com a primeira palavra e ordem alfabética.
      */
     fun search(query: String): Flow<List<FoodEntity>> {
-        val tokens = Repository.normalize(query).split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
+        val parsed = FoodSynonyms.parse(Repository.normalize(query))
+        val tokens = parsed.tokens
         if (tokens.isEmpty()) return flowOf(emptyList())
         val first = tokens.first()
         val main = tokens.maxBy { it.length }
-        return foods.searchToken(main).map { list ->
-            list.asSequence()
-                .filter { food -> tokens.all { food.searchName.contains(it) } }
-                .sortedWith(
-                    compareByDescending<FoodEntity> { it.favorite }
-                        .thenByDescending { it.searchName.startsWith(first) }
-                        .thenBy { it.searchName }
-                )
+        val variants = tokens.map { FoodSynonyms.variants(it) }
+        val restVariants = parsed.rest.map { FoodSynonyms.variants(it) }
+        val groups = parsed.groups
+        // Poucas consultas pequenas no banco (com LIKE e LIMIT), nunca a tabela inteira.
+        val sources = buildList<Flow<List<FoodEntity>>> {
+            FoodSynonyms.variants(main).forEach { add(foods.searchToken(it)) }
+            groups.firstOrNull()?.let { g ->
+                if (g.categories.isNotEmpty()) add(foods.inCategories(g.categories))
+                g.likeTokens.forEach { add(foods.searchToken(it)) }
+            }
+        }
+
+        fun rank(food: FoodEntity): Int? {
+            val s = food.searchName
+            val exact = tokens.all { s.contains(it) }
+            val loose = exact || variants.all { forms -> forms.any { s.contains(it) } }
+            if (loose) return if (groups.any { it.excludes(food) }) 3 else if (exact) 0 else 1
+            val inGroup = groups.isNotEmpty() && groups.all { it.matches(food) } &&
+                restVariants.all { forms -> forms.any { s.contains(it) } }
+            return if (inGroup) 2 else null
+        }
+
+        return combine(sources) { lists ->
+            val seen = HashSet<Long>()
+            val ranked = ArrayList<Pair<Int, FoodEntity>>()
+            lists.forEach { list ->
+                list.forEach { food -> if (seen.add(food.id)) rank(food)?.let { ranked += it to food } }
+            }
+            ranked.sortedWith(
+                compareBy<Pair<Int, FoodEntity>> { it.first }
+                    .thenByDescending { it.second.favorite }
+                    .thenByDescending { it.second.searchName.startsWith(first) }
+                    .thenBy { it.second.searchName }
+            )
                 .take(150)
-                .toList()
+                .map { it.second }
         }.flowOn(Dispatchers.Default)
     }
+
+    /** Alimentos pelo nome sem acento, na ordem pedida (os que não existem ficam de fora). */
+    suspend fun foodsByNames(names: List<String>): List<FoodEntity> {
+        if (names.isEmpty()) return emptyList()
+        val found = foods.byNames(names.distinct()).associateBy { it.searchName }
+        return names.distinct().mapNotNull { found[it] }
+    }
+
+    /** Primeiro resultado da busca (para nomes vindos de fora, ex.: um estimador de pratos). */
+    suspend fun bestMatch(query: String): FoodEntity? = search(query).first().firstOrNull()
+
+    suspend fun portionsOnce(foodId: Long): List<FoodPortionEntity> = db.foodPortionDao().observeForFood(foodId).first()
 
     fun favorites(): Flow<List<FoodEntity>> = foods.observeFavoritesSorted()
 
@@ -77,6 +119,12 @@ class FoodRepository(private val db: AppDatabase) {
 
     suspend fun log(date: LocalDate, food: FoodEntity, choice: PortionChoice, mealType: MealType) {
         db.mealDao().insert(mealFor(date, food, choice, mealType))
+    }
+
+    /** Registra vários alimentos de uma vez (prato por foto). */
+    suspend fun logAll(date: LocalDate, items: List<Pair<FoodEntity, PortionChoice>>, mealType: MealType) {
+        if (items.isEmpty()) return
+        db.mealDao().insertAll(items.map { (food, choice) -> mealFor(date, food, choice, mealType) })
     }
 
     suspend fun dayMeals(date: LocalDate): List<MealEntity> = db.mealDao().dayOnce(date.toEpochDay())

@@ -1,6 +1,7 @@
 package com.addsoncosta.evolui.ui.health
 
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -8,6 +9,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.size
@@ -55,7 +58,9 @@ import com.addsoncosta.evolui.health.Attachments
 import com.addsoncosta.evolui.health.FieldKind
 import com.addsoncosta.evolui.health.HealthFields
 import com.addsoncosta.evolui.health.LabCatalog
+import com.addsoncosta.evolui.health.EyeExam
 import com.addsoncosta.evolui.health.ParsedExam
+import com.addsoncosta.evolui.health.ReportSummary
 import com.addsoncosta.evolui.ui.appContainer
 import com.addsoncosta.evolui.ui.components.DateFormat
 import com.addsoncosta.evolui.ui.components.KeyValue
@@ -87,6 +92,8 @@ fun RecordDetailScreen(
     var showText by remember { mutableStateOf<HealthAttachmentEntity?>(null) }
     var chart by remember { mutableStateOf<String?>(null) }
     var suggestions by remember { mutableStateOf<ParsedExam?>(null) }
+    var eyeSuggestion by remember { mutableStateOf<EyeExam?>(null) }
+    var reportSuggestion by remember { mutableStateOf<ReportSummary?>(null) }
 
     val r = record
     LaunchedEffect(r) {
@@ -98,10 +105,18 @@ fun RecordDetailScreen(
     val spec = HealthFields.spec(type)
     val extra = remember(r.extra) { HealthRepository.decodeExtra(r.extra) }
 
-    val importer = rememberFileImporter(type) { pending, parsed ->
+    val reportExam = type == HealthType.EXAME && HealthFields.isReportExam(extra)
+    val importer = rememberHealthImporter(type, reportExam) { pending, data ->
         scope.launch {
             repo.addAttachment(r.id, pending)
-            if (parsed != null && !parsed.isEmpty && (spec.hasValues || parsed.date != null)) suggestions = parsed
+            val eye = data.eye
+            val report = data.report
+            val parsed = data.exam
+            when {
+                eye != null && !eye.isEmpty -> eyeSuggestion = eye
+                report != null && !report.isEmpty -> reportSuggestion = report
+                parsed != null && !parsed.isEmpty && (spec.hasValues || parsed.date != null) -> suggestions = parsed
+            }
         }
     }
 
@@ -122,7 +137,21 @@ fun RecordDetailScreen(
                 if (type == HealthType.EXAME && r.place.isNullOrBlank()) {
                     Text("Falta dizer em que laboratório foi feito. Toque em editar.", color = MaterialTheme.colorScheme.error)
                 }
-                extra.forEach { (k, v) ->
+                if (reportExam) {
+                    Text("Exame de imagem ou procedimento", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                    val conclusion = extra[HealthFields.REPORT_CONCLUSION]?.takeIf { it.isNotBlank() }
+                    if (conclusion != null) {
+                        ConclusionBox(conclusion)
+                    } else {
+                        Text("Sem a conclusão do laudo. Toque em editar para digitar, ou anexe o laudo abaixo.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (type == HealthType.OFTALMOLOGIA) {
+                    EyeTable(extra)
+                    extra[HealthFields.EYE_DIAGNOSES]?.takeIf { it.isNotBlank() }?.let { KeyValue("Diagnósticos", it) }
+                }
+                val hidden = setOf(HealthFields.EXAM_KIND, HealthFields.REPORT_CONCLUSION, HealthFields.EYE_DIAGNOSES)
+                extra.filterKeys { k -> k !in hidden && !(type == HealthType.OFTALMOLOGIA && HealthFields.isEyeKey(k)) }.forEach { (k, v) ->
                     val value = if (HealthFields.kind(type, k) == FieldKind.DATE) HealthRepository.parseDate(v)?.format(DateFormat) ?: v else v
                     Column {
                         Text(HealthFields.label(type, k), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelLarge)
@@ -141,7 +170,7 @@ fun RecordDetailScreen(
                 }
             }
         }
-        if (spec.hasValues) {
+        if (spec.hasValues && !reportExam) {
             if (results.isNotEmpty()) {
                 item { LabValuesPanel(results, profile?.sex, onItem = { chart = it }) }
             } else {
@@ -236,6 +265,43 @@ fun RecordDetailScreen(
             confirmButton = { TextButton(onClick = { showText = null }) { Text("Fechar") } },
         )
     }
+    eyeSuggestion?.let { eye ->
+        EyeSuggestionsDialog(
+            eye = eye,
+            onApply = { date, values ->
+                scope.launch {
+                    var updated: HealthRecordEntity = r
+                    if (date != null) updated = updated.copy(epochDay = date.toEpochDay())
+                    if (values.isNotEmpty()) updated = updated.copy(extra = HealthRepository.encodeExtra(extra + values))
+                    if (updated != r) repo.update(updated)
+                    Toast.makeText(context, "Dados da receita adicionados. Confira.", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDismiss = { eyeSuggestion = null },
+        )
+    }
+    reportSuggestion?.let { rep ->
+        ReportSuggestionsDialog(
+            summary = rep,
+            onApply = { s ->
+                scope.launch {
+                    var updated: HealthRecordEntity = r
+                    val newExtra = extra.toMutableMap()
+                    newExtra[HealthFields.EXAM_KIND] = HealthFields.EXAM_KIND_REPORT
+                    s.conclusion?.let { newExtra[HealthFields.REPORT_CONCLUSION] = it }
+                    s.reportingDoctor?.let { newExtra[HealthFields.REPORT_DOCTOR] = it }
+                    updated = updated.copy(extra = HealthRepository.encodeExtra(newExtra))
+                    s.date?.let { updated = updated.copy(epochDay = it.toEpochDay()) }
+                    s.examName?.let { if (updated.title.isBlank() || updated.title == type.singular) updated = updated.copy(title = it) }
+                    s.place?.let { if (updated.place.isNullOrBlank()) updated = updated.copy(place = it) }
+                    s.requestingDoctor?.let { if (updated.professional.isNullOrBlank()) updated = updated.copy(professional = it) }
+                    if (updated != r) repo.update(updated)
+                    Toast.makeText(context, "Resumo do laudo guardado. Confira.", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDismiss = { reportSuggestion = null },
+        )
+    }
     chart?.let { name ->
         val points = remember(allResults, name) { allResults.filter { it.analyte == name }.sortedBy { it.epochDay } }
         AnalyteChartDialog(name, points, profile?.sex, onDismiss = { chart = null })
@@ -289,6 +355,52 @@ private fun AttachmentRow(
             IconButton(onClick = onShare) { Icon(Icons.Filled.Share, "Enviar arquivo") }
             IconButton(onClick = onText, enabled = !f.ocrText.isNullOrBlank()) { Icon(Icons.Filled.Description, "Ver texto lido") }
             IconButton(onClick = onRemove) { Icon(Icons.Filled.Delete, "Remover", tint = MaterialTheme.colorScheme.error) }
+        }
+    }
+}
+
+/** Conclusão do laudo em destaque. */
+@Composable
+private fun ConclusionBox(text: String) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f), RoundedCornerShape(12.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text("Conclusão do laudo", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+        Text(text, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+/** Tabela dos olhos: cada medida com OD e OE lado a lado. */
+@Composable
+private fun EyeTable(extra: Map<String, String>) {
+    val rows = HealthFields.eyeMeasures.mapNotNull { m ->
+        val od = extra[HealthFields.eyeKey("od", m.key)]?.takeIf { it.isNotBlank() }
+        val oe = extra[HealthFields.eyeKey("oe", m.key)]?.takeIf { it.isNotBlank() }
+        if (od == null && oe == null) null else Triple(m.label + (m.unit?.let { " ($it)" } ?: ""), od ?: "—", oe ?: "—")
+    }
+    if (rows.isEmpty()) return
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(Modifier.fillMaxWidth()) {
+            Text("", Modifier.weight(1.4f))
+            Text("OD (direito)", Modifier.weight(1f), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+            Text("OE (esquerdo)", Modifier.weight(1f), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+        }
+        rows.forEach { (label, od, oe) ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, Modifier.weight(1.4f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(od, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                Text(oe, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+            }
         }
     }
 }

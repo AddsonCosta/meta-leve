@@ -33,16 +33,24 @@ import androidx.compose.ui.unit.dp
 import com.addsoncosta.evolui.data.HealthType
 import com.addsoncosta.evolui.data.LabResultEntity
 import com.addsoncosta.evolui.health.Attachments
+import com.addsoncosta.evolui.health.BioParser
 import com.addsoncosta.evolui.health.ExamParser
+import com.addsoncosta.evolui.health.EyeParser
+import com.addsoncosta.evolui.health.EyeExam
+import com.addsoncosta.evolui.health.EyeValues
 import com.addsoncosta.evolui.health.FoundValue
 import com.addsoncosta.evolui.health.LabCatalog
 import com.addsoncosta.evolui.health.LabItem
 import com.addsoncosta.evolui.health.Ocr
 import com.addsoncosta.evolui.health.ParsedExam
 import com.addsoncosta.evolui.health.PendingFile
+import com.addsoncosta.evolui.health.ReportSummary
+import com.addsoncosta.evolui.health.ReportSummaryParser
 import com.addsoncosta.evolui.ui.components.DateFormat
 import java.time.LocalDate
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Escolhe um PDF ou imagem, guarda no app e tenta ler o texto. */
 class FileImporter(private val start: () -> Unit, private val busyState: State<Boolean>) {
@@ -57,13 +65,66 @@ fun catalogFor(type: HealthType): List<LabItem> = when (type) {
     else -> emptyList()
 }
 
+/** Tudo o que a leitura do arquivo achou, conforme o tipo de registro. */
+data class ImportedData(
+    /** Data, laboratório e valores (exames e bioimpedância; nos outros tipos, só a data). */
+    val exam: ParsedExam? = null,
+    /** Receita de óculos (Oftalmologia). */
+    val eye: EyeExam? = null,
+    /** Resumo do laudo de imagem ou procedimento (Exames). */
+    val report: ReportSummary? = null,
+)
+
+/** Separa, do texto lido do arquivo, o que interessa para cada tipo de registro. */
+fun interpret(type: HealthType, text: String, usedPlaces: List<String>, reportMode: Boolean): ImportedData = when (type) {
+    HealthType.OFTALMOLOGIA -> {
+        val eye = EyeParser.parse(text)
+        val base = ExamParser.parse(text, emptyList(), usedPlaces)
+        ImportedData(exam = ParsedExam(eye.date ?: base.date, null, emptyList()), eye = eye)
+    }
+    HealthType.BIOIMPEDANCIA -> {
+        // Só o essencial (peso, gordura, músculo, água, visceral, TMB, idade metabólica, IMC).
+        val values = BioParser.parse(text).mapNotNull { v -> LabCatalog.find(v.name)?.let { FoundValue(it, v.value, v.line) } }
+        val base = ExamParser.parse(text, emptyList(), usedPlaces)
+        ImportedData(exam = ParsedExam(base.date, null, values))
+    }
+    HealthType.EXAME -> {
+        val parsed = ExamParser.parse(text, LabCatalog.labItems, usedPlaces)
+        val complex = reportMode || (parsed.values.size < 3 && ReportSummaryParser.isComplexReport(text))
+        if (complex) {
+            val r = ReportSummaryParser.parse(text)
+            val report = r.copy(date = parsed.date ?: r.date, place = parsed.lab ?: r.place)
+            // Laudo de imagem: não sugere valores soltos que a leitura possa ter achado no meio do texto.
+            ImportedData(exam = ParsedExam(report.date, report.place, emptyList()), report = report)
+        } else {
+            ImportedData(exam = parsed)
+        }
+    }
+    else -> ImportedData(exam = ExamParser.parse(text, emptyList(), usedPlaces))
+}
+
 @Composable
 fun rememberFileImporter(type: HealthType, onResult: (PendingFile, ParsedExam?) -> Unit): FileImporter {
+    val callback by rememberUpdatedState(onResult)
+    return rememberHealthImporter(type) { file, data -> callback(file, data.exam) }
+}
+
+/**
+ * Escolhe o arquivo, guarda no app e lê o texto. [reportMode] diz se o exame é de imagem/laudo
+ * (para ler a conclusão em vez de valores).
+ */
+@Composable
+fun rememberHealthImporter(
+    type: HealthType,
+    reportMode: Boolean = false,
+    onResult: (PendingFile, ImportedData) -> Unit,
+): FileImporter {
     val context = LocalContext.current
     val repo = rememberHealthRepository()
     val scope = rememberCoroutineScope()
     val busy = remember { mutableStateOf(false) }
     val callback by rememberUpdatedState(onResult)
+    val report by rememberUpdatedState(reportMode)
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
@@ -82,8 +143,9 @@ fun rememberFileImporter(type: HealthType, onResult: (PendingFile, ParsedExam?) 
                         Toast.LENGTH_LONG,
                     ).show()
                 }
-                val parsed = text?.let { ExamParser.parse(it, catalogFor(type), repo.places(type)) }
-                callback(pending.copy(ocrText = text), parsed)
+                val places = repo.places(type)
+                val data = text?.let { t -> withContext(Dispatchers.Default) { interpret(type, t, places, report) } } ?: ImportedData()
+                callback(pending.copy(ocrText = text), data)
             } finally {
                 busy.value = false
             }
@@ -158,4 +220,127 @@ private fun CheckRow(checked: Boolean, onChange: (Boolean) -> Unit, title: Strin
             if (detail != null) Text("“$detail”", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
         }
     }
+}
+
+/** Uma linha de resumo do olho: "-2,00 -0,75 x 180° · AV 20/20 · PIO 14 mmHg · Adição +2,00". */
+fun eyeSummary(v: EyeValues): String = listOfNotNull(
+    v.refraction().ifBlank { null },
+    v.adicao?.let { "Adição $it" },
+    v.acuidade?.let { "AV $it" },
+    v.pio?.let { "PIO $it mmHg" },
+).joinToString(" · ")
+
+/** "Encontramos estes dados na receita": o usuário escolhe o que vai para o formulário. */
+@Composable
+fun EyeSuggestionsDialog(
+    eye: EyeExam,
+    onApply: (date: LocalDate?, extras: Map<String, String>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var useDate by remember { mutableStateOf(eye.date != null) }
+    var useOd by remember { mutableStateOf(!eye.od.isEmpty) }
+    var useOe by remember { mutableStateOf(!eye.oe.isEmpty) }
+    var useDnp by remember { mutableStateOf(eye.dnp != null) }
+    var useDiag by remember { mutableStateOf(eye.diagnoses.isNotEmpty()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Encontramos estes dados na receita") },
+        text = {
+            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "Confira com a receita antes de usar. Os valores vão para o formulário e você ainda pode corrigir.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                eye.date?.let { d -> CheckRow(useDate, { useDate = it }, "Data: ${d.format(DateFormat)}", null) }
+                if (!eye.od.isEmpty) CheckRow(useOd, { useOd = it }, "Olho direito (OD)", eyeSummary(eye.od))
+                if (!eye.oe.isEmpty) CheckRow(useOe, { useOe = it }, "Olho esquerdo (OE)", eyeSummary(eye.oe))
+                eye.dnp?.let { CheckRow(useDnp, { v -> useDnp = v }, "DNP: $it mm", null) }
+                if (eye.diagnoses.isNotEmpty()) CheckRow(useDiag, { useDiag = it }, "Diagnósticos: ${eye.diagnoses.joinToString(", ")}", null)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val all = eye.toExtras()
+                val chosen = all.filterKeys { k ->
+                    when {
+                        k.startsWith("od_") -> useOd
+                        k.startsWith("oe_") -> useOe
+                        k == "dnp" -> useDnp
+                        k == EyeParser.DIAGNOSES_KEY -> useDiag
+                        else -> false
+                    }
+                }
+                onApply(if (useDate) eye.date else null, chosen)
+                onDismiss()
+            }) { Text("Usar selecionados") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Agora não") } },
+    )
+}
+
+/** "Resumo do laudo": exame, data, local, médicos e conclusão, para o usuário conferir. */
+@Composable
+fun ReportSuggestionsDialog(
+    summary: ReportSummary,
+    onApply: (ReportSummary) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var useName by remember { mutableStateOf(summary.examName != null) }
+    var useDate by remember { mutableStateOf(summary.date != null) }
+    var usePlace by remember { mutableStateOf(summary.place != null) }
+    var useReq by remember { mutableStateOf(summary.requestingDoctor != null) }
+    var useRep by remember { mutableStateOf(summary.reportingDoctor != null) }
+    var useConc by remember { mutableStateOf(summary.conclusion != null) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Resumo do laudo") },
+        text = {
+            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "O app guarda só o essencial do laudo. O arquivo completo continua anexado. Confira antes de usar.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                summary.examName?.let { CheckRow(useName, { v -> useName = v }, "Exame: $it", null) }
+                summary.date?.let { d -> CheckRow(useDate, { useDate = it }, "Data: ${d.format(DateFormat)}", null) }
+                summary.place?.let { CheckRow(usePlace, { v -> usePlace = v }, "Local: $it", null) }
+                summary.requestingDoctor?.let { CheckRow(useReq, { v -> useReq = v }, "Médico que pediu: $it", null) }
+                summary.reportingDoctor?.let { CheckRow(useRep, { v -> useRep = v }, "Médico do laudo: $it", null) }
+                summary.conclusion?.let { c ->
+                    Row(Modifier.fillMaxWidth().clickable { useConc = !useConc }, verticalAlignment = Alignment.Top) {
+                        Checkbox(checked = useConc, onCheckedChange = { useConc = it })
+                        Column(Modifier.weight(1f)) {
+                            Text("Conclusão", fontWeight = FontWeight.Bold)
+                            Text(c, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+                if (summary.conclusion == null) {
+                    Text(
+                        "Não achamos a conclusão no texto. Você pode digitá-la no campo \"Conclusão do laudo\".",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onApply(
+                    ReportSummary(
+                        examName = summary.examName.takeIf { useName },
+                        date = summary.date.takeIf { useDate },
+                        place = summary.place.takeIf { usePlace },
+                        requestingDoctor = summary.requestingDoctor.takeIf { useReq },
+                        reportingDoctor = summary.reportingDoctor.takeIf { useRep },
+                        conclusion = summary.conclusion.takeIf { useConc },
+                        looksLikeReport = summary.looksLikeReport,
+                    ),
+                )
+                onDismiss()
+            }) { Text("Usar selecionados") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Agora não") } },
+    )
 }

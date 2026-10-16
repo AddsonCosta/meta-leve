@@ -28,8 +28,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         HealthConditionEntity::class,
         ToothStateEntity::class,
         MenstrualCycleEntity::class,
+        BloodPressureEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -51,10 +52,11 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun healthConditionDao(): HealthConditionDao
     abstract fun toothStateDao(): ToothStateDao
     abstract fun menstrualCycleDao(): MenstrualCycleDao
+    abstract fun bloodPressureDao(): BloodPressureDao
 
     companion object {
         fun create(context: Context): AppDatabase =
-            Room.databaseBuilder(context, AppDatabase::class.java, "evolui.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
+            Room.databaseBuilder(context, AppDatabase::class.java, "evolui.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
 
         /** Versão 2: jejum, fotos de progresso e treinos importados do Health Connect. */
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -91,6 +93,18 @@ abstract class AppDatabase : RoomDatabase() {
                 add("photo", "offsetY", "REAL")
                 add("photo", "caption", "TEXT")
                 CREATE_V3.forEach(db::execSQL)
+            }
+        }
+
+        /** Versão 4: pressão arterial (no mesmo formato que o Room gera). */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `blood_pressure` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`epochMillis` INTEGER NOT NULL, `systolic` INTEGER NOT NULL, `diastolic` INTEGER NOT NULL, " +
+                        "`pulse` INTEGER, `arm` TEXT, `position` TEXT, `notes` TEXT)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_blood_pressure_epochMillis` ON `blood_pressure` (`epochMillis`)")
             }
         }
 

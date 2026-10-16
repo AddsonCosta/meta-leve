@@ -16,10 +16,15 @@ import android.graphics.Typeface
 import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Build
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.FileProvider
 import com.addsoncosta.evolui.data.PeriodStats
 import com.addsoncosta.evolui.ui.components.DateFormat
 import com.addsoncosta.evolui.ui.components.fmt
+import com.addsoncosta.evolui.ui.theme.Evolui
+import com.addsoncosta.evolui.ui.theme.Palette
+import com.addsoncosta.evolui.ui.theme.Section
+import com.addsoncosta.evolui.ui.theme.drawThemeBackdrop
 import java.io.File
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -112,28 +117,74 @@ private fun minutes(m: Double): String {
 private fun periodDates(s: PeriodStats): String =
     if (s.from == s.to) s.to.format(DateFormat) else "${s.from.format(DateFormat)} a ${s.to.format(DateFormat)}"
 
-/** Desenha a imagem de compartilhamento no visual escuro esportivo. */
-fun renderShareImage(s: PeriodStats, period: SharePeriod, shape: ImageShape, photos: List<CaptionedPhoto>): Bitmap {
+// ---------- Cores do tema nas imagens ----------
+
+private fun opaque(c: Int): Int = c or (0xFF shl 24)
+
+private fun blend(a: Int, b: Int, t: Float): Int {
+    fun ch(x: Int, y: Int) = (x + (y - x) * t).toInt().coerceIn(0, 255)
+    return (0xFF shl 24) or
+        (ch((a shr 16) and 0xFF, (b shr 16) and 0xFF) shl 16) or
+        (ch((a shr 8) and 0xFF, (b shr 8) and 0xFF) shl 8) or
+        ch(a and 0xFF, b and 0xFF)
+}
+
+/**
+ * Fundo do tema na imagem (com a arte da seção) e um véu leve da cor de fundo por cima,
+ * para o texto continuar legível mesmo com a arte atrás.
+ */
+internal fun drawShareBackground(c: Canvas, w: Float, h: Float, palette: Palette, section: Section, artAlpha: Float = 0.55f) {
+    c.drawColor(opaque(palette.background.toArgb()))
+    drawThemeBackdrop(c, w, h, palette, section, artAlpha)
+    val bg = palette.background.toArgb() and 0x00FFFFFF
+    // Véu: mais forte no topo e embaixo, onde ficam título e rodapé.
+    c.drawRect(0f, 0f, w, h, Paint().apply {
+        shader = LinearGradient(
+            0f, 0f, 0f, h,
+            intArrayOf(bg or 0x66000000, bg or 0x1A000000, bg or 0x1A000000, bg or 0x80000000.toInt()),
+            floatArrayOf(0f, 0.25f, 0.7f, 1f), Shader.TileMode.CLAMP,
+        )
+    })
+}
+
+/**
+ * Cor de cartão sobre o fundo: a superfície do tema, já misturada ao fundo e com opacidade
+ * mínima (temas de vidro têm superfícies translúcidas, que sumiriam sobre a arte).
+ */
+internal fun shareCardColor(palette: Palette, minAlpha: Int = 0xE0): Int {
+    val surface = palette.surface.toArgb()
+    val a = (surface ushr 24).coerceAtLeast(minAlpha)
+    val solid = blend(opaque(palette.background.toArgb()), opaque(surface), (surface ushr 24) / 255f)
+    return (solid and 0x00FFFFFF) or (a shl 24)
+}
+
+/** Pincel de texto nas cores do tema, com uma sombra suave da cor de fundo para destacar da arte. */
+internal fun sharePaint(size: Float, color: Int, palette: Palette, bold: Boolean = true, halo: Boolean = true) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    textSize = size
+    this.color = color
+    typeface = Typeface.create(Typeface.SANS_SERIF, if (bold) Typeface.BOLD else Typeface.NORMAL)
+    if (halo) setShadowLayer(size * 0.18f, 0f, size * 0.03f, (palette.background.toArgb() and 0x00FFFFFF) or 0xB0000000.toInt())
+}
+
+/** Desenha a imagem de compartilhamento com o fundo e as cores do tema escolhido. */
+fun renderShareImage(
+    s: PeriodStats,
+    period: SharePeriod,
+    shape: ImageShape,
+    photos: List<CaptionedPhoto>,
+    palette: Palette = Evolui.palette,
+): Bitmap {
     val w = shape.width
     val h = shape.height
     val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
     val c = Canvas(bmp)
-    val neon = 0xFF39FF88.toInt()
-    val muted = 0xFF9AA8A2.toInt()
-    val white = 0xFFF2F5F3.toInt()
+    val neon = opaque(palette.accent.toArgb())
+    val muted = opaque(palette.textMuted.toArgb())
+    val white = opaque(palette.text.toArgb())
 
-    // Fundo escuro com brilho verde no canto.
-    c.drawColor(0xFF0B0F0E.toInt())
-    val glow = Paint().apply {
-        shader = LinearGradient(0f, 0f, w.toFloat(), h * 0.6f, 0x5539FF88, 0x000B0F0E, Shader.TileMode.CLAMP)
-    }
-    c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), glow)
+    drawShareBackground(c, w.toFloat(), h.toFloat(), palette, Section.PROGRESS)
 
-    fun text(size: Float, color: Int, bold: Boolean = true) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = size
-        this.color = color
-        typeface = Typeface.create(Typeface.SANS_SERIF, if (bold) Typeface.BOLD else Typeface.NORMAL)
-    }
+    fun text(size: Float, color: Int, bold: Boolean = true) = sharePaint(size, color, palette, bold)
 
     val pad = PAD
     var y = pad + 60f
@@ -151,9 +202,9 @@ fun renderShareImage(s: PeriodStats, period: SharePeriod, shape: ImageShape, pho
             val cell = RectF(area.left + i * (cellW + gap), area.top, area.left + i * (cellW + gap) + cellW, area.bottom)
             drawFramed(c, p.bitmap, cell, 36f, p.framing)
             p.title?.let { t -> drawPhotoTitle(c, t, cell, 36f) }
-            val label = text(if (photos.size > 1) 30f else 34f, white)
+            val label = sharePaint(if (photos.size > 1) 30f else 34f, white, palette, halo = false)
             val tw = label.measureText(p.caption)
-            val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xB30B0F0E.toInt() }
+            val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = shareCardColor(palette, 0xC8) }
             c.drawRoundRect(RectF(cell.left + 20f, cell.bottom - 84f, cell.left + 52f + tw, cell.bottom - 20f), 32f, 32f, bg)
             c.drawText(p.caption, cell.left + 36f, cell.bottom - 40f, label)
         }
@@ -195,16 +246,23 @@ fun renderShareImage(s: PeriodStats, period: SharePeriod, shape: ImageShape, pho
     val cols = 2
     val tileW = (w - pad * 2 - tileGap) / cols
     val tileH = 190f
-    val tileBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF141A18.toInt() }
+    val tileBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = shareCardColor(palette) }
+    val tileLine = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+        color = (palette.outline.toArgb() and 0x00FFFFFF) or 0x99000000.toInt()
+    }
     tiles.forEachIndexed { i, (value, label) ->
         val col = i % cols
         val row = i / cols
         val left = pad + col * (tileW + tileGap)
         val top = y + row * (tileH + tileGap)
         if (top + tileH > h - 140f) return@forEachIndexed
-        c.drawRoundRect(RectF(left, top, left + tileW, top + tileH), 40f, 40f, tileBg)
-        c.drawText(value, left + 36f, top + 100f, text(72f, white))
-        c.drawText(label, left + 36f, top + 150f, text(32f, muted, bold = false))
+        val tile = RectF(left, top, left + tileW, top + tileH)
+        c.drawRoundRect(tile, 40f, 40f, tileBg)
+        c.drawRoundRect(tile, 40f, 40f, tileLine)
+        c.drawText(value, left + 36f, top + 100f, sharePaint(72f, white, palette, halo = false))
+        c.drawText(label, left + 36f, top + 150f, sharePaint(32f, muted, palette, bold = false, halo = false))
     }
 
     c.drawText("Feito com o app Evolui", pad, h - 72f, text(32f, muted, bold = false))

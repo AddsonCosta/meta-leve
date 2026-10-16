@@ -24,7 +24,41 @@ data class TypeSpec(
     val hasValues: Boolean = false,
 )
 
+/** Uma medida da receita de óculos, com um campo para cada olho (`od_<key>` e `oe_<key>`). */
+data class EyeMeasure(val key: String, val label: String, val help: String, val unit: String? = null)
+
 object HealthFields {
+    /** Medidas por olho na Oftalmologia (OD = olho direito, OE = olho esquerdo). */
+    val eyeMeasures: List<EyeMeasure> = listOf(
+        EyeMeasure("esferico", "Esférico", "Grau de miopia (-) ou hipermetropia (+). Ex.: -2,00"),
+        EyeMeasure("cilindrico", "Cilíndrico", "Grau de astigmatismo. Ex.: -0,75"),
+        EyeMeasure("eixo", "Eixo", "De 0 a 180. Ex.: 180", "°"),
+        EyeMeasure("adicao", "Adição", "Para perto (vista cansada). Ex.: +2,00"),
+        EyeMeasure("av", "Acuidade visual", "Ex.: 20/20"),
+        EyeMeasure("pio", "Pressão intraocular", "Ex.: 14", "mmHg"),
+    )
+
+    fun eyeKey(eye: String, measure: String) = "${eye}_$measure"
+
+    fun isEyeKey(key: String): Boolean = (key.startsWith("od_") || key.startsWith("oe_")) && eyeMeasures.any { key.endsWith("_" + it.key) }
+
+    /** Diagnósticos marcados nos chips (separados por vírgula). */
+    const val EYE_DIAGNOSES = EyeParser.DIAGNOSES_KEY
+
+    /** Exame de imagem ou procedimento com laudo (ultrassom, ressonância...). */
+    const val EXAM_KIND = "tipo_exame"
+    const val EXAM_KIND_REPORT = "Imagem ou laudo"
+    const val REPORT_CONCLUSION = "conclusao"
+    const val REPORT_DOCTOR = "medico_laudo"
+
+    /** Campos extras do exame com laudo (o resumo do laudo). */
+    val reportFields: List<ExtraField> = listOf(
+        ExtraField(REPORT_CONCLUSION, "Conclusão do laudo", "Só a conclusão (ou impressão diagnóstica) do laudo. Ex.: Colelitíase.", FieldKind.LONG_TEXT),
+        ExtraField(REPORT_DOCTOR, "Médico que assinou o laudo", "Ex.: Dra. Ana Souza (radiologista)"),
+    )
+
+    fun isReportExam(extra: Map<String, String>): Boolean = extra[EXAM_KIND] == EXAM_KIND_REPORT
+
     private val sessionStatuses = listOf("Em andamento", "Concluído", "Pausado")
 
     private fun sessionExtras(goalHelp: String) = listOf(
@@ -123,6 +157,24 @@ object HealthFields {
             descriptionLabel = "Observações",
             hasValues = true,
         )
+        HealthType.OFTALMOLOGIA -> TypeSpec(
+            titleLabel = "Título", titleHelp = "Ex.: Consulta com oftalmologista, exame de vista",
+            professionalLabel = "Oftalmologista", professionalHelp = "Ex.: Dra. Paula Rocha",
+            placeLabel = "Clínica", placeHelp = "Ex.: Clínica de Olhos Visão",
+            descriptionLabel = "Anotações da consulta",
+            descriptionHelp = "Ex.: o que o médico disse, colírios receitados, tipo de lente indicada.",
+            extras = eyeMeasures.flatMap { m ->
+                listOf(
+                    ExtraField(eyeKey("od", m.key), "${m.label} OD", m.help),
+                    ExtraField(eyeKey("oe", m.key), "${m.label} OE", m.help),
+                )
+            } + listOf(
+                ExtraField("dnp", "DNP (distância pupilar)", "Em milímetros. Ex.: 62 ou 31/31"),
+                ExtraField(EYE_DIAGNOSES, "Diagnósticos", "Toque nos que o médico citou"),
+                ExtraField("diagnostico_obs", "Outros diagnósticos e orientações", "Ex.: usar óculos o tempo todo, colírio lubrificante", FieldKind.LONG_TEXT),
+                ExtraField("proxima", "Próxima consulta", "Quando voltar ao oftalmologista", FieldKind.DATE),
+            ),
+        )
         HealthType.ANAMNESE -> TypeSpec(
             titleLabel = "Título", titleHelp = "Ex.: Anamnese",
             professionalLabel = "Profissional", professionalHelp = "Opcional",
@@ -132,11 +184,14 @@ object HealthFields {
 
     /** Rótulo legível de uma chave do JSON `extra` (também para chaves de outras telas). */
     fun label(type: HealthType?, key: String): String =
-        type?.let { t -> spec(t).extras.firstOrNull { it.key == key }?.label }
-            ?: key.replace('_', ' ').replaceFirstChar { it.uppercase() }
+        type?.let { t -> fieldsOf(t).firstOrNull { it.key == key }?.label }
+            ?: if (key == EXAM_KIND) "Tipo de exame" else key.replace('_', ' ').replaceFirstChar { it.uppercase() }
 
     fun kind(type: HealthType?, key: String): FieldKind =
-        type?.let { t -> spec(t).extras.firstOrNull { it.key == key }?.kind } ?: FieldKind.TEXT
+        type?.let { t -> fieldsOf(t).firstOrNull { it.key == key }?.kind } ?: FieldKind.TEXT
+
+    private fun fieldsOf(type: HealthType): List<ExtraField> =
+        if (type == HealthType.EXAME) spec(type).extras + reportFields else spec(type).extras
 
     fun typeOf(name: String): HealthType? = HealthType.entries.firstOrNull { it.name == name }
 }

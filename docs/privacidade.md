@@ -24,6 +24,9 @@ O Evolui não envia esses dados para fora do aparelho e não os usa para publici
 ## Fotos e compartilhamento
 As fotos de progresso são copiadas para a pasta interna do aplicativo e não saem do aparelho. Quando você usa **Compartilhar**, o Evolui monta uma imagem ou um texto e abre a lista de aplicativos do Android; só é enviado o que você escolher, para o aplicativo que você escolher.
 
+## Prato por foto
+A função **Prato por foto** analisa a imagem no próprio celular (ML Kit, do Google, executado no aparelho). A foto não é enviada para a internet nem guardada: fica só temporariamente no cache do app e é apagada ao sair da tela. Os alimentos sugeridos são uma estimativa e só são registrados depois que você confere. Fotos do medidor de pressão também são lidas no aparelho e não são guardadas.
+
 ## Leitura de arquivos
 Quando você anexa um PDF ou uma imagem de exame, o Evolui pode ler o texto do arquivo para sugerir os valores. Essa leitura é feita **no próprio aparelho**, com o reconhecimento de texto do Google Play Services (ML Kit); o arquivo e o texto não são enviados para nós.
 
