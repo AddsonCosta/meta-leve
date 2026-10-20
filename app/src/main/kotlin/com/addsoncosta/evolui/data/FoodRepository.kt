@@ -92,6 +92,9 @@ class FoodRepository(private val db: AppDatabase) {
     /** Primeiro resultado da busca (para nomes vindos de fora, ex.: um estimador de pratos). */
     suspend fun bestMatch(query: String): FoodEntity? = search(query).first().firstOrNull()
 
+    /** Os primeiros resultados da busca, uma vez só. */
+    suspend fun searchOnce(query: String, limit: Int): List<FoodEntity> = search(query).first().take(limit)
+
     suspend fun portionsOnce(foodId: Long): List<FoodPortionEntity> = db.foodPortionDao().observeForFood(foodId).first()
 
     fun favorites(): Flow<List<FoodEntity>> = foods.observeFavoritesSorted()

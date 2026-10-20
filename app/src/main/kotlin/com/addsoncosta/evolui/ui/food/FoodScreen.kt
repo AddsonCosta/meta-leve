@@ -53,6 +53,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.addsoncosta.evolui.data.FoodEntity
 import com.addsoncosta.evolui.data.FoodRepository
+import com.addsoncosta.evolui.data.MealType
+import com.addsoncosta.evolui.data.nutritionFor
 import com.addsoncosta.evolui.data.Portions
 import com.addsoncosta.evolui.data.SavedMeal
 import com.addsoncosta.evolui.data.SavedMealItemEntity
@@ -66,6 +68,7 @@ import java.time.LocalDate
 
 @Composable
 fun FoodScreen() {
+    val context = LocalContext.current
     val container = appContainer()
     val vm: FoodViewModel = viewModel(factory = viewModelFactory { initializer { FoodViewModel(container) } })
     var editor by remember { mutableStateOf<SavedMealDraft?>(null) }
@@ -104,7 +107,14 @@ fun FoodScreen() {
             onSave = {
                 vm.saveMeal(draft)
                 editor = null
+                Toast.makeText(context, "Refeição \"${draft.name.trim()}\" salva", Toast.LENGTH_SHORT).show()
             },
+            onSaveAndLog = {
+                vm.saveAndLogMeal(draft)
+                editor = null
+                Toast.makeText(context, loggedMessage(draft.type, draft.items.sumOf { it.kcal }), Toast.LENGTH_LONG).show()
+            },
+            dayLabel = dayLabel(vm.date.collectAsStateWithLifecycle().value),
             onDelete = {
                 vm.deleteSavedMeal(draft.id)
                 editor = null
@@ -132,6 +142,11 @@ private fun FoodHome(vm: FoodViewModel, onOpenEditor: (SavedMealDraft) -> Unit, 
     var loggingSaved by remember { mutableStateOf<SavedMeal?>(null) }
     var savingDay by remember { mutableStateOf(false) }
 
+    fun logSaved(meal: SavedMeal, type: MealType) {
+        vm.logSavedMeal(meal, type)
+        Toast.makeText(context, loggedMessage(type, meal.kcal), Toast.LENGTH_LONG).show()
+    }
+
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.padding(16.dp, 16.dp, 16.dp, 0.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -153,11 +168,21 @@ private fun FoodHome(vm: FoodViewModel, onOpenEditor: (SavedMealDraft) -> Unit, 
             header = {
                 if (query.isBlank()) {
                     item(key = "foto") { PhotoMealCard(onOpen = onOpenPhoto, modifier = Modifier.padding(bottom = 12.dp)) }
+                    item(key = "sugestoes") {
+                        QuickSuggestions(
+                            vm = vm,
+                            hint = "Refeição salva registra na hora; alimento abre a medida, já com a última que você usou.",
+                            onFood = { selected = it },
+                            onMeal = { meal -> logSaved(meal, meal.type) },
+                            modifier = Modifier.padding(bottom = 12.dp),
+                        )
+                    }
                     item(key = "salvas") {
                         SavedMealsPanel(
                             meals = savedMeals,
+                            dayLabel = dayLabel(date),
                             onLog = { loggingSaved = it },
-                            onEdit = { onOpenEditor(SavedMealDraft.from(it)) },
+                            onQuickLog = { meal -> logSaved(meal, meal.type) },
                             onSaveDay = { savingDay = true },
                             onNew = { onOpenEditor(SavedMealDraft()) },
                         )
@@ -176,7 +201,7 @@ private fun FoodHome(vm: FoodViewModel, onOpenEditor: (SavedMealDraft) -> Unit, 
             onConfirm = { choice, type ->
                 vm.log(food, choice, type)
                 selected = null
-                Toast.makeText(context, "Registrado em ${type.label}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, loggedMessage(type, food.nutritionFor(choice.grams).kcal), Toast.LENGTH_SHORT).show()
             },
             onEditFood = if (food.custom) ({ editingFood = food; selected = null }) else null,
             onDeleteFood = if (food.custom) ({ deletingFood = food; selected = null }) else null,
@@ -203,9 +228,8 @@ private fun FoodHome(vm: FoodViewModel, onOpenEditor: (SavedMealDraft) -> Unit, 
             dayLabel = dayLabel(date),
             onDismiss = { loggingSaved = null },
             onLog = { type ->
-                vm.logSavedMeal(meal, type)
                 loggingSaved = null
-                Toast.makeText(context, "\"${meal.meal.name}\" registrada em ${type.label}", Toast.LENGTH_SHORT).show()
+                logSaved(meal, type)
             },
             onEdit = {
                 loggingSaved = null

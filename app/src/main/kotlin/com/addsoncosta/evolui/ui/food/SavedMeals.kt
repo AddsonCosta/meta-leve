@@ -74,6 +74,9 @@ data class SavedMealDraft(
 
 private fun defaultMealName(type: MealType) = "Meu " + type.label.lowercase()
 
+/** "hoje" ou "em 12/10". */
+internal fun onDay(dayLabel: String) = if (dayLabel == "hoje") dayLabel else "em $dayLabel"
+
 /** Aviso depois de registrar: "Registrado no Almoço: 520 kcal". */
 internal fun loggedMessage(type: MealType, kcal: Double) = "Registrado no ${type.label}: ${kcal.fmt()} kcal"
 
@@ -140,7 +143,7 @@ internal fun SavedMealsPanel(
                 }
             }
             Text(
-                "Registrar soma tudo em $dayLabel, na refeição de costume. Toque no nome para escolher outra refeição ou editar.",
+                "Registrar soma tudo ${onDay(dayLabel)}, na refeição de costume. Toque no nome para escolher outra refeição ou editar.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -316,7 +319,7 @@ internal fun SavedMealEditor(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val ok = draft.name.isNotBlank() && draft.items.isNotEmpty()
                 Button(onClick = onSaveAndLog, enabled = ok, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (dayLabel == "hoje") "Salvar e registrar hoje" else "Salvar e registrar em $dayLabel")
+                    Text("Salvar e registrar ${onDay(dayLabel)}")
                 }
                 OutlinedButton(onClick = onSave, enabled = ok, modifier = Modifier.fillMaxWidth()) { Text("Só salvar") }
                 if (!ok) {

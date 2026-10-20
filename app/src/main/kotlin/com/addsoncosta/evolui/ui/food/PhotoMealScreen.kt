@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -59,6 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.addsoncosta.evolui.ai.AiDocumentReader
 import com.addsoncosta.evolui.data.FoodEntity
 import com.addsoncosta.evolui.data.FoodRepository
 import com.addsoncosta.evolui.data.Measure
@@ -71,6 +73,7 @@ import com.addsoncosta.evolui.data.nutritionFor
 import com.addsoncosta.evolui.ui.components.Overline
 import com.addsoncosta.evolui.ui.components.Panel
 import com.addsoncosta.evolui.ui.components.fmt
+import com.addsoncosta.evolui.ui.settings.MyAiDialog
 import com.addsoncosta.evolui.ui.share.loadBitmap
 import java.io.File
 import kotlin.math.max
@@ -111,7 +114,12 @@ internal data class PlateItem(
     val choice: PortionChoice,
     val size: PlateSize?,
     val checked: Boolean,
+    /** Medida caseira dita pela IA, só para mostrar. */
+    val hint: String? = null,
 ) {
+    /** Montado com os valores da IA (não está na tabela do app). */
+    val fromAi: Boolean get() = food.id < 0
+
     val nutrition: Nutrition get() = food.nutritionFor(choice.grams)
 }
 
@@ -139,10 +147,18 @@ internal fun sizedChoice(food: FoodEntity, measures: List<Measure>, size: PlateS
 }
 
 private suspend fun makeItem(foods: FoodRepository, s: PlateSuggestion): PlateItem {
-    val measures = Portions.measures(s.food, foods.portionsOnce(s.food.id))
+    val measures = Portions.measures(s.food, if (s.food.id > 0) foods.portionsOnce(s.food.id) else emptyList())
     val grams = s.grams
+    val servingName = s.food.servingName
+    val servingGrams = s.food.servingGrams
     return if (grams != null && grams > 0) {
-        PlateItem(s.food, measures, PortionChoice(Portions.round1(grams), null, null), null, s.checked)
+        // Alimento da IA: mostra na medida caseira que ela disse ("2 colheres de sopa (≈ 30 g)").
+        val choice = if (s.food.id < 0 && servingName != null && servingGrams != null && servingGrams > 0) {
+            PortionChoice(Portions.round1(grams), Portions.round1(grams / servingGrams), servingName)
+        } else {
+            PortionChoice(Portions.round1(grams), null, null)
+        }
+        PlateItem(s.food, measures, choice, null, s.checked, hint = s.hint.takeIf { s.food.id > 0 })
     } else {
         PlateItem(s.food, measures, sizedChoice(s.food, measures, PlateSize.MEDIUM), PlateSize.MEDIUM, s.checked)
     }
@@ -171,7 +187,7 @@ internal fun PhotoMealCard(onOpen: () -> Unit, modifier: Modifier = Modifier) {
 /**
  * Prato por foto: tira ou escolhe a foto, reconhece no aparelho o que parece haver no prato, sugere alimentos
  * do banco com porções médias e registra tudo de uma vez. A foto fica só na memória e no cache enquanto a tela
- * está aberta; nada é enviado para fora do celular.
+ * está aberta. Só sai do celular se o usuário tocar em "Analisar com minha IA" (vai para a IA que ele conectou).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -189,6 +205,18 @@ internal fun PhotoMealScreen(vm: FoodViewModel, onClose: () -> Unit, estimator: 
     var type by remember { mutableStateOf(defaultMealType()) }
     var job by remember { mutableStateOf<Job?>(null) }
     val dir = remember { File(context.cacheDir, PHOTO_DIR) }
+    val ai = remember { AiDocumentReader(context) }
+    var aiConnected by remember { mutableStateOf(ai.isConnected()) }
+    var aiName by remember { mutableStateOf(ai.providerName()) }
+    var aiBusy by remember { mutableStateOf(false) }
+    var aiNote by remember { mutableStateOf<String?>(null) }
+    var aiError by remember { mutableStateOf(false) }
+    var connectingAi by remember { mutableStateOf(false) }
+    // O celular não reconheceu nada útil na foto.
+    var unrecognized by remember { mutableStateOf(false) }
+    // Itens que vieram da análise da foto (do celular ou da IA); os adicionados à mão ficam quando a IA responde.
+    var autoIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var nextTempId by remember { mutableStateOf(-1L) }
 
     // Ao sair da tela, a foto temporária é apagada.
     DisposableEffect(Unit) {
@@ -214,7 +242,10 @@ internal fun PhotoMealScreen(vm: FoodViewModel, onClose: () -> Unit, estimator: 
         job?.cancel()
         job = scope.launch {
             busy = true
+            aiBusy = false
             note = null
+            aiNote = null
+            unrecognized = false
             val bmp = withContext(Dispatchers.IO) {
                 val b = load()
                 // A foto da câmera não fica guardada: depois de aberta (já reduzida), o arquivo é apagado.
@@ -236,19 +267,58 @@ internal fun PhotoMealScreen(vm: FoodViewModel, onClose: () -> Unit, estimator: 
             }
             if (guesses == null) {
                 seen = emptyList()
-                note = "Não deu para analisar a foto neste aparelho. Adicione os alimentos pela busca ou comece pelo prato típico."
+                unrecognized = true
             } else {
                 seen = guesses
                 val suggestions = resolveGuesses(vm.foods, guesses)
                 addSuggestions(suggestions)
-                if (suggestions.isEmpty()) {
-                    note = if (guesses.isNotEmpty()) {
-                        "A foto parece de comida, mas não deu para saber quais alimentos. Comece pelo prato típico ou adicione pela busca."
-                    } else {
-                        "Não reconheci alimentos na foto. Comece pelo prato típico ou adicione pela busca."
+                autoIds = autoIds + suggestions.map { it.food.id }
+                // Só rótulos gerais ("comida", "prato") ou nada: o celular não sabe que prato é.
+                unrecognized = suggestions.isEmpty()
+            }
+            busy = false
+        }
+    }
+
+    /** Manda a foto para a IA do usuário e troca as sugestões automáticas pelo que ela encontrou. */
+    fun analyzeWithAi() {
+        val bmp = photo ?: return
+        job?.cancel()
+        job = scope.launch {
+            busy = true
+            aiBusy = true
+            aiNote = null
+            val result = ai.readPlate(bmp)
+            val analysis = result.getOrNull()
+            if (analysis == null) {
+                aiError = true
+                aiNote = result.exceptionOrNull()?.message ?: "Não deu para analisar com a sua IA agora. Tente de novo."
+            } else {
+                val list = resolveAiPlate(vm.foods, analysis) { nextTempId.also { nextTempId = it - 1 } }
+                if (list.isEmpty()) {
+                    aiError = true
+                    aiNote = analysis.note ?: "A sua IA não encontrou alimentos nesta foto. Adicione pela busca ou pelas sugestões."
+                } else {
+                    val fresh = list.map { makeItem(vm.foods, it) }
+                    val freshIds = fresh.map { it.food.id }.toHashSet()
+                    plate = fresh + plate.filter { it.food.id !in autoIds && it.food.id !in freshIds }
+                    autoIds = freshIds
+                    unrecognized = false
+                    aiError = false
+                    val local = fresh.count { !it.fromAi }
+                    aiNote = buildString {
+                        append("Sua IA encontrou ")
+                        append(if (fresh.size == 1) "1 alimento" else "${fresh.size} alimentos")
+                        append(" (≈ ${analysis.kcal.fmt()} kcal)")
+                        analysis.confidenceLabel?.let { append(", confiança $it") }
+                        append(". ")
+                        if (local > 0) append("Os que estão na tabela do app usam os valores dela. ")
+                        append("Confira as porções antes de registrar.")
+                        analysis.note?.let { append("\n").append(it) }
                     }
                 }
             }
+            aiBusy = false
             busy = false
         }
     }
@@ -360,7 +430,8 @@ internal fun PhotoMealScreen(vm: FoodViewModel, onClose: () -> Unit, estimator: 
                             }
                         }
                         Text(
-                            "A foto é analisada no próprio celular, não é enviada para a internet e é apagada ao sair desta tela.",
+                            "A foto é analisada no próprio celular e é apagada ao sair desta tela. Ela só vai para a internet " +
+                                "se você tocar em \"Analisar com minha IA\".",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -370,8 +441,27 @@ internal fun PhotoMealScreen(vm: FoodViewModel, onClose: () -> Unit, estimator: 
                     item(key = "analisando") {
                         Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             CircularProgressIndicator(Modifier.size(24.dp))
-                            Text("  Analisando a foto…")
+                            Text(if (aiBusy) "  Perguntando para a sua IA…" else "  Analisando a foto…")
                         }
+                    }
+                }
+                if (photo != null && !busy && unrecognized) {
+                    item(key = "nao-reconheci") {
+                        Panel {
+                            Text("Não reconheci este prato.", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                if (aiConnected) "Use sua IA para identificar os alimentos e as porções, ou escolha nas sugestões abaixo."
+                                else "Use sua IA para identificar: conecte a sua (Claude, ChatGPT, Gemini e outras). " +
+                                    "Ou escolha nas sugestões abaixo.",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            AiButton(aiConnected, aiName, onAnalyze = { analyzeWithAi() }, onConnect = { connectingAi = true })
+                        }
+                    }
+                }
+                aiNote?.let { text ->
+                    item(key = "ia-aviso") {
+                        Text(text, color = if (aiError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
                     }
                 }
                 note?.let { text ->
@@ -428,6 +518,31 @@ internal fun PhotoMealScreen(vm: FoodViewModel, onClose: () -> Unit, estimator: 
                         }
                     }
                 }
+                if (photo != null && !busy && !unrecognized) {
+                    item(key = "ia") { AiButton(aiConnected, aiName, onAnalyze = { analyzeWithAi() }, onConnect = { connectingAi = true }) }
+                }
+                item(key = "sugestoes") {
+                    QuickSuggestions(
+                        vm = vm,
+                        hint = "Toque para pôr no prato.",
+                        onFood = { food ->
+                            scope.launch {
+                                val last = vm.foods.lastMeal(food.id)
+                                addSuggestions(listOf(PlateSuggestion(food, true, last?.grams)))
+                            }
+                        },
+                        onMeal = { meal ->
+                            scope.launch {
+                                val list = meal.items.mapNotNull { mi ->
+                                    mi.foodId?.let { vm.foods.food(it) }?.let { PlateSuggestion(it, true, mi.grams) }
+                                }
+                                addSuggestions(list)
+                                if (list.size < meal.items.size) note = "Alguns itens de \"${meal.meal.name}\" não estão mais na lista de alimentos."
+                            }
+                        },
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
                 if (plate.isEmpty() && !busy) {
                     item(key = "dica-tipico") {
                         Text(
@@ -480,6 +595,14 @@ internal fun PhotoMealScreen(vm: FoodViewModel, onClose: () -> Unit, estimator: 
         }
     }
 
+    if (connectingAi) {
+        MyAiDialog(onDismiss = {
+            connectingAi = false
+            aiConnected = ai.isConnected()
+            aiName = ai.providerName()
+        })
+    }
+
     adjusting?.let { item ->
         PortionDialog(
             food = item.food,
@@ -515,6 +638,14 @@ private fun PlateItemRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                val extra = when {
+                    item.fromAi -> "Valores da sua IA (não está na tabela do app)"
+                    item.hint != null -> "Sua IA disse: ${item.hint}"
+                    else -> null
+                }
+                if (extra != null) {
+                    Text(extra, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
             }
             IconButton(onClick = onRemove) { Icon(Icons.Filled.Close, "Tirar do prato") }
         }
@@ -529,5 +660,28 @@ private fun PlateItemRow(
             )
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+/** "Analisar com minha IA" (já conectada) ou "Conectar minha IA". */
+@Composable
+private fun AiButton(connected: Boolean, name: String?, onAnalyze: () -> Unit, onConnect: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (connected) {
+            FilledTonalButton(onClick = onAnalyze, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.AutoAwesome, null)
+                Text(" Analisar com minha IA")
+            }
+            Text(
+                "A foto vai para ${name ?: "a IA que você conectou"}, com a sua chave. O custo fica na sua conta de lá.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            OutlinedButton(onClick = onConnect, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.AutoAwesome, null)
+                Text(" Conectar minha IA")
+            }
+        }
     }
 }

@@ -50,6 +50,37 @@ object Ocr {
         }
     }
 
+    /**
+     * As páginas do arquivo como imagens (para mandar à IA do usuário): a foto reduzida, ou as
+     * primeiras [maxPages] páginas do PDF. Lista vazia se não conseguir abrir.
+     */
+    suspend fun pageImages(context: Context, file: File, mimeType: String, maxPages: Int = 3, maxSide: Int = 1600): List<Bitmap> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                if (mimeType == "application/pdf" || file.name.endsWith(".pdf", ignoreCase = true)) {
+                    ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
+                        val renderer = PdfRenderer(pfd)
+                        try {
+                            (0 until min(renderer.pageCount, maxPages)).map { i ->
+                                renderer.openPage(i).use { page ->
+                                    val scale = maxSide.toFloat() / page.width.coerceAtLeast(1)
+                                    val h = (page.height * scale).toInt().coerceIn(1, maxSide * 3)
+                                    val b = Bitmap.createBitmap(maxSide, h, Bitmap.Config.ARGB_8888)
+                                    b.eraseColor(Color.WHITE)
+                                    page.render(b, null, Matrix().apply { setScale(scale, scale) }, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                                    b
+                                }
+                            }
+                        } finally {
+                            renderer.close()
+                        }
+                    }
+                } else {
+                    listOfNotNull(loadBitmap(context, file, maxSide))
+                }
+            }.getOrDefault(emptyList())
+        }
+
     private suspend fun readPdf(file: File, recognizer: TextRecognizer): List<String> {
         val out = mutableListOf<String>()
         val fd = withContext(Dispatchers.IO) { ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY) }

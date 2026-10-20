@@ -1,6 +1,7 @@
 package com.addsoncosta.evolui.ui.share
 
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CenterFocusStrong
+import androidx.compose.material.icons.filled.Rotate90DegreesCw
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.Button
@@ -79,6 +81,8 @@ fun FramedImage(
 /**
  * Editor de enquadramento: arrastar move, pinça aproxima. A moldura tem exatamente a proporção
  * ([aspect] = largura / altura) em que a foto vai aparecer.
+ * Com [onSaveRotated], aparece também o botão de girar; ao salvar, recebe o enquadramento e o giro
+ * (0, 90, 180 ou 270 graus, no sentido horário) para gravar a foto girada.
  */
 @Composable
 fun FrameEditorDialog(
@@ -88,14 +92,17 @@ fun FrameEditorDialog(
     onDismiss: () -> Unit,
     onSave: (Framing) -> Unit,
     title: String = "Ajustar enquadramento",
+    onSaveRotated: ((Framing, Int) -> Unit)? = null,
 ) {
+    var turns by remember { mutableStateOf(0) }
+    val shown = remember(bitmap, turns) { rotated(bitmap, turns * 90) }
     var framing by remember { mutableStateOf(initial) }
     var box by remember { mutableStateOf(IntSize.Zero) }
     val frameMaxHeight = (LocalConfiguration.current.screenHeightDp * 0.55f).dp
     val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
 
     fun fit(f: Framing): Framing =
-        if (box.width > 0) f.clamped(bitmap.width, bitmap.height, box.width.toFloat(), box.height.toFloat()) else f
+        if (box.width > 0) f.clamped(shown.width, shown.height, box.width.toFloat(), box.height.toFloat()) else f
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
@@ -123,7 +130,7 @@ fun FrameEditorDialog(
                             .size(w, h)
                             .onSizeChanged { box = it }
                             .border(2.dp, MaterialTheme.colorScheme.primary, shape)
-                            .pointerInput(bitmap) {
+                            .pointerInput(shown) {
                                 detectTransformGestures { _, pan, zoom, _ ->
                                     val fw = size.width.toFloat()
                                     val fh = size.height.toFloat()
@@ -131,11 +138,11 @@ fun FrameEditorDialog(
                                         scale = framing.scale * zoom,
                                         offsetX = framing.offsetX + pan.x / fw,
                                         offsetY = framing.offsetY + pan.y / fh,
-                                    ).clamped(bitmap.width, bitmap.height, fw, fh)
+                                    ).clamped(shown.width, shown.height, fw, fh)
                                 }
                             },
                     ) {
-                        FramedImage(bitmap, framing, Modifier.fillMaxSize(), shape)
+                        FramedImage(shown, framing, Modifier.fillMaxSize(), shape)
                         // Linhas de terço, para ajudar a centralizar o rosto e o corpo.
                         Canvas(Modifier.fillMaxSize()) {
                             for (i in 1..2) {
@@ -159,15 +166,33 @@ fun FrameEditorDialog(
                         Icon(Icons.Filled.CenterFocusStrong, null)
                         Text("  Centralizar")
                     }
+                    if (onSaveRotated != null) {
+                        IconButton(onClick = {
+                            turns = (turns + 1) % 4
+                            framing = Framing()
+                        }) {
+                            Icon(Icons.Filled.Rotate90DegreesCw, "Girar")
+                        }
+                    }
                     IconButton(onClick = { framing = fit(framing.copy(scale = framing.scale * 1.2f)) }) {
                         Icon(Icons.Filled.ZoomIn, "Aproximar")
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) { Text("Cancelar") }
-                    Button(onClick = { onSave(fit(framing)) }) { Text("Salvar", fontWeight = FontWeight.Bold) }
+                    Button(onClick = {
+                        val f = fit(framing)
+                        if (onSaveRotated != null) onSaveRotated(f, turns * 90) else onSave(f)
+                    }) { Text("Salvar", fontWeight = FontWeight.Bold) }
                 }
             }
         }
     }
+}
+
+/** A foto girada em [degrees] no sentido horário (a mesma, sem cópia, quando é 0). */
+internal fun rotated(bitmap: Bitmap, degrees: Int): Bitmap {
+    val d = ((degrees % 360) + 360) % 360
+    if (d == 0) return bitmap
+    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, Matrix().apply { postRotate(d.toFloat()) }, true)
 }

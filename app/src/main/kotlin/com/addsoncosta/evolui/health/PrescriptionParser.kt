@@ -107,7 +107,7 @@ object PrescriptionParser {
         "(?<![a-z])(paciente|nome|endereco|rua|av\\.|avenida|telefone|tel\\.|tel:|fone|cpf|rg|crm|cremesp|rqe|cro|crn|" +
             "receituario|receita|prescricao|assinatura|carimbo|identificacao|comprador|fornecedor|farmaceutic|cep|www|" +
             "nascimento|idade|convenio|cnpj|hospital|clinica|consultorio|bairro|cidade|e-mail|email|data|validade|" +
-            "via do paciente|via da farmacia|controle especial|emitente|sus|cartao)(?![a-z])",
+            "via do paciente|via da farmacia|controle especial|emitente|sus|cartao|porcao|valor energetico|ingredientes|informacao nutricional|lote|fabricacao)(?![a-z])",
     )
 
     private val usageHeader = Regex("^\\s*(?:uso\\s+(?:oral|interno|externo|topico|continuo|nasal|oftalmico|otologico|retal|vaginal|sublingual|inalatorio|injetavel|intramuscular)|via oral)\\s*[:.\\-]?\\s*$")

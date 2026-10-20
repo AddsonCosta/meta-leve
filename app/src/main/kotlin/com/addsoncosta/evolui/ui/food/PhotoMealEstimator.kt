@@ -1,6 +1,9 @@
 package com.addsoncosta.evolui.ui.food
 
 import android.graphics.Bitmap
+import com.addsoncosta.evolui.ai.AiFoodItem
+import com.addsoncosta.evolui.ai.PlateAiParser
+import com.addsoncosta.evolui.ai.PlateAnalysis
 import com.addsoncosta.evolui.data.FoodEntity
 import com.addsoncosta.evolui.data.FoodRepository
 import com.addsoncosta.evolui.data.Repository
@@ -54,8 +57,68 @@ class OnDevicePlateEstimator : PlateEstimator {
     }
 }
 
-/** Sugestão pronta para a tela: o alimento do banco, se já vem marcado e a quantidade estimada (se houver). */
-data class PlateSuggestion(val food: FoodEntity, val checked: Boolean, val grams: Double?)
+/**
+ * Sugestão pronta para a tela: o alimento do banco, se já vem marcado e a quantidade estimada (se houver).
+ * [hint] é a medida caseira dita pela IA ("1 concha média"). Alimento com id negativo foi montado com os valores
+ * da IA e não existe no banco.
+ */
+data class PlateSuggestion(val food: FoodEntity, val checked: Boolean, val grams: Double?, val hint: String? = null)
+
+/** Categoria dos alimentos montados com os valores da IA (não ficam no banco). */
+internal const val AI_CATEGORY = "Estimado pela sua IA"
+
+/** Palavras que a IA costuma acrescentar e que a tabela não usa ("arroz branco cozido" → "arroz cozido"). */
+private val fillerWords = setOf("branco", "branca", "simples", "caseiro", "caseira", "comum", "tradicional", "normal", "pronto", "pronta")
+
+/**
+ * Troca os alimentos da IA pelos da tabela do app quando o nome bate e as calorias por 100 g são parecidas;
+ * senão, usa os valores da própria IA. [newId] dá ids negativos para os alimentos montados.
+ */
+suspend fun resolveAiPlate(foods: FoodRepository, analysis: PlateAnalysis, newId: () -> Long): List<PlateSuggestion> {
+    val out = LinkedHashMap<Long, PlateSuggestion>()
+    for (item in analysis.items) {
+        val per100 = item.kcal * 100 / item.grams
+        fun plausible(f: FoodEntity) = (f.kcal + 10) / (per100 + 10) in 0.5..2.0
+        val name = Repository.normalize(item.name)
+        val queries = buildList {
+            add(name)
+            val trimmed = name.split(' ').filter { it.isNotBlank() && it !in fillerWords }.joinToString(" ")
+            if (trimmed.isNotBlank() && trimmed != name) add(trimmed)
+        }
+        var match: FoodEntity? = null
+        for (q in queries) {
+            match = foods.searchOnce(q, 5).firstOrNull { plausible(it) }
+            if (match != null) break
+        }
+        val food = match ?: aiFood(item, newId())
+        val old = out[food.id]
+        out[food.id] = if (old == null) {
+            PlateSuggestion(food, true, item.grams, item.household)
+        } else {
+            old.copy(grams = (old.grams ?: 0.0) + item.grams, hint = null)
+        }
+    }
+    return out.values.toList()
+}
+
+/** Alimento com os valores da IA, por 100 g como na tabela; a medida caseira dela vira a porção. */
+private fun aiFood(item: AiFoodItem, id: Long): FoodEntity {
+    val f = 100 / item.grams
+    val measure = PlateAiParser.splitHousehold(item.household)
+    return FoodEntity(
+        id = id,
+        category = AI_CATEGORY,
+        name = item.name,
+        searchName = Repository.normalize(item.name),
+        kcal = item.kcal * f,
+        protein = item.protein * f,
+        fat = item.fat * f,
+        carb = item.carb * f,
+        fiber = 0.0,
+        servingName = measure?.second,
+        servingGrams = measure?.let { (amount, _) -> item.grams / amount },
+    )
+}
 
 /** Troca os nomes dos palpites pelos alimentos do banco (nome exato primeiro; senão, o primeiro da busca). */
 suspend fun resolveGuesses(foods: FoodRepository, guesses: List<PlateGuess>, max: Int = 12): List<PlateSuggestion> {
