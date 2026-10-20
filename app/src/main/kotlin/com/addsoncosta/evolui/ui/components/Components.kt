@@ -15,6 +15,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -61,10 +62,26 @@ fun NumberField(
     decimal: Boolean = true,
     help: String? = null,
     error: String? = null,
+    highlight: Boolean = false,
 ) {
     val invalid = error != null || (value.isNotEmpty() && value.toDecimal() == null)
-    val below = error ?: help
+    // Campo que a leitura automática não conseguiu preencher: leve destaque e "Preencher".
+    val mark = highlight && !invalid && value.isEmpty()
+    val below = error ?: if (mark) (if (help.isNullOrBlank()) "Preencher" else "Preencher · $help") else help
+    val tint = MaterialTheme.colorScheme.tertiary
     OutlinedTextField(
+        colors = if (mark) {
+            OutlinedTextFieldDefaults.colors(
+                unfocusedContainerColor = tint.copy(alpha = 0.10f),
+                focusedContainerColor = tint.copy(alpha = 0.06f),
+                unfocusedBorderColor = tint.copy(alpha = 0.85f),
+                unfocusedLabelColor = tint,
+                unfocusedSupportingTextColor = tint,
+                focusedSupportingTextColor = tint,
+            )
+        } else {
+            OutlinedTextFieldDefaults.colors()
+        },
         value = value,
         onValueChange = { new -> if (new.all { it.isDigit() || (decimal && (it == ',' || it == '.')) }) onValueChange(new) },
         label = { Text(label) },

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Bloodtype
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -36,6 +37,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,6 +58,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.addsoncosta.evolui.core.Sex
 import com.addsoncosta.evolui.data.HealthRecordEntity
@@ -62,7 +66,15 @@ import com.addsoncosta.evolui.data.HealthRepository
 import com.addsoncosta.evolui.data.HealthType
 import com.addsoncosta.evolui.data.LabResultEntity
 import com.addsoncosta.evolui.data.Repository
+import com.addsoncosta.evolui.data.HealthAttachmentEntity
+import com.addsoncosta.evolui.health.AiFormReader
+import com.addsoncosta.evolui.health.AiSource
 import com.addsoncosta.evolui.health.Attachments
+import com.addsoncosta.evolui.health.AutoFill
+import com.addsoncosta.evolui.health.DocumentAutoFill
+import com.addsoncosta.evolui.health.PrescribedMedicine
+import com.addsoncosta.evolui.health.Prescription
+import com.addsoncosta.evolui.health.TakeReminders
 import com.addsoncosta.evolui.health.EyeExam
 import com.addsoncosta.evolui.health.EyeParser
 import com.addsoncosta.evolui.health.FieldKind
@@ -73,6 +85,7 @@ import com.addsoncosta.evolui.health.ParsedExam
 import com.addsoncosta.evolui.health.PendingFile
 import com.addsoncosta.evolui.health.ReportSummary
 import com.addsoncosta.evolui.ui.appContainer
+import com.addsoncosta.evolui.ui.health.care.rememberNotificationAsker
 import com.addsoncosta.evolui.ui.components.NumberField
 import com.addsoncosta.evolui.ui.components.Overline
 import com.addsoncosta.evolui.ui.components.Panel
@@ -132,6 +145,21 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
     var suggestions by remember { mutableStateOf<ParsedExam?>(null) }
     var eyeSuggestion by remember { mutableStateOf<EyeExam?>(null) }
     var reportSuggestion by remember { mutableStateOf<ReportSummary?>(null) }
+    // Leitura automática: campos essenciais que o documento não trouxe ficam destacados ("Preencher").
+    val missing = remember { mutableStateListOf<String>() }
+    var dateTouched by remember { mutableStateOf(false) }
+    var dateRead by remember { mutableStateOf(false) }
+    // Receita lida: remédios a salvar em Medicação junto com este registro.
+    var prescriptionAsk by remember { mutableStateOf<Prescription?>(null) }
+    var rxSource by remember { mutableStateOf<Prescription?>(null) }
+    val extraMeds = remember { mutableStateListOf<PrescribedMedicine>() }
+    var extraMedsReminders by remember { mutableStateOf(false) }
+    var remindOnSave by remember { mutableStateOf(false) }
+    var aiBusy by remember { mutableStateOf(false) }
+    val aiConnected = remember { AiFormReader.isConnected(context) }
+    val askNotifications = rememberNotificationAsker()
+    val savedFiles by remember(recordId) { repo.observeAttachments(recordId) }.collectAsStateWithLifecycle(initialValue = emptyList<HealthAttachmentEntity>())
+    val supplements by remember(type) { repo.observeType(type) }.collectAsStateWithLifecycle(initialValue = emptyList<HealthRecordEntity>())
     // Exame de imagem ou procedimento: guarda só o resumo do laudo, sem tabela de valores.
     val reportExam = type == HealthType.EXAME && extras[HealthFields.EXAM_KIND] == HealthFields.EXAM_KIND_REPORT
 
@@ -144,7 +172,49 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
         val i = rows.indexOfFirst { it.key == key }
         if (i >= 0) rows[i] = change(rows[i])
     }
-    fun snapshot(): String = listOf(day, title, professional, place, description, status, extras.toMap(), rows.map { it.copy(key = 0, showRef = false) }, pending.size).toString()
+    fun snapshot(): String = listOf(day, title, professional, place, description, status, extras.toMap(), rows.map { it.copy(key = 0, showRef = false) }, pending.size, extraMeds.size).toString()
+
+    fun valueOf(key: String): String = when (key) {
+        DocumentAutoFill.DATE -> if (dateRead || dateTouched) "ok" else ""
+        DocumentAutoFill.TITLE -> title.takeIf { it != type.singular }.orEmpty()
+        DocumentAutoFill.PROFESSIONAL -> professional
+        DocumentAutoFill.PLACE -> place
+        else -> extras[key].orEmpty()
+    }
+    fun marked(key: String): Boolean = key in missing
+
+    /**
+     * Preenche os campos vazios com o que a leitura achou e destaca os essenciais que faltaram.
+     * Devolve quantos campos foram preenchidos.
+     */
+    fun applyFill(fill: AutoFill): Int {
+        var count = 0
+        val isNew = original == null
+        fill.date?.let { d ->
+            dateRead = true
+            if (isNew && !dateTouched) { day = d.toEpochDay(); count++ }
+        }
+        fill.title?.let { if (title.isBlank() || title == type.singular) { title = it; count++ } }
+        fill.professional?.let { if (professional.isBlank()) { professional = it; count++ } }
+        fill.place?.let { if (place.isBlank()) { place = it; placeError = false; count++ } }
+        fill.description?.let { if (description.isBlank()) { description = it; count++ } }
+        fill.extras.forEach { (k, v) -> if (extras[k].isNullOrBlank() && v.isNotBlank()) { extras[k] = v; count++ } }
+        val essential = DocumentAutoFill.essentialKeys(type, type == HealthType.EXAME && extras[HealthFields.EXAM_KIND] == HealthFields.EXAM_KIND_REPORT)
+        missing.clear()
+        essential.filter { it != DocumentAutoFill.DATE && valueOf(it).isBlank() }.forEach { missing += it }
+        if (DocumentAutoFill.DATE in essential && !dateRead && !dateTouched && isNew) missing += DocumentAutoFill.DATE
+        return count
+    }
+
+    /** Receita com remédios: na Medicação, o primeiro já foi para o formulário; o resto (e na Consulta, todos) vai junto ao salvar. */
+    fun offerPrescription(rx: Prescription?) {
+        if (rx == null || rx.medicines.isEmpty()) return
+        if (type != HealthType.MEDICACAO && type != HealthType.CONSULTA) return
+        rxSource = rx
+        val others = if (type == HealthType.MEDICACAO) rx.medicines.drop(1) else rx.medicines
+        if (others.isEmpty()) return
+        prescriptionAsk = rx.copy(medicines = others)
+    }
 
     LaunchedEffect(recordId) {
         if (recordId != 0L) {
@@ -169,7 +239,7 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
         } else if (type == HealthType.BIOIMPEDANCIA) {
             LabCatalog.bioimpedance.forEach { rows += newRow(it, it.name) }
             title = "Bioimpedância"
-        } else if (type == HealthType.MEDICACAO) {
+        } else if (type == HealthType.MEDICACAO || type == HealthType.SUPLEMENTACAO) {
             status = "Em uso"
         }
         initial = snapshot()
@@ -196,14 +266,49 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
         val eye = data.eye
         val report = data.report
         val parsed = data.exam
+        if (report != null && !report.isEmpty) {
+            // Laudo de imagem reconhecido: muda o formulário para o modo laudo.
+            extras[HealthFields.EXAM_KIND] = HealthFields.EXAM_KIND_REPORT
+        }
+        // Campos de texto: preenche sozinho o que estiver vazio.
+        val filled = applyFill(data.fill ?: AutoFill())
         when {
             eye != null && !eye.isEmpty -> eyeSuggestion = eye
-            report != null && !report.isEmpty -> {
-                // Laudo de imagem reconhecido: muda o formulário para o modo laudo.
-                extras[HealthFields.EXAM_KIND] = HealthFields.EXAM_KIND_REPORT
-                reportSuggestion = report
+            parsed != null && parsed.values.isNotEmpty() && spec.hasValues -> suggestions = parsed
+        }
+        offerPrescription(data.fill?.prescription)
+        if (filled > 0) {
+            Toast.makeText(context, "Preenchemos $filled ${if (filled == 1) "campo" else "campos"} com o arquivo. Confira.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun readWithAi() {
+        if (aiBusy) return
+        val sources = pending.map { AiSource(Attachments.file(context, it.fileName), it.mimeType, it.ocrText) } +
+            savedFiles.map { AiSource(Attachments.file(context, it.fileName), it.mimeType, it.ocrText) }
+        if (sources.isEmpty()) {
+            Toast.makeText(context, "Anexe um arquivo primeiro.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        aiBusy = true
+        scope.launch {
+            try {
+                AiFormReader.read(context, type, reportExam, sources)
+                    .onSuccess { fill ->
+                        val n = applyFill(fill)
+                        offerPrescription(fill.prescription)
+                        Toast.makeText(
+                            context,
+                            if (n > 0) "Sua IA preencheu $n ${if (n == 1) "campo" else "campos"}. Confira." else "Sua IA não achou mais nada para preencher.",
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                    .onFailure { e ->
+                        Toast.makeText(context, e.message ?: "Não deu para ler com a IA agora.", Toast.LENGTH_LONG).show()
+                    }
+            } finally {
+                aiBusy = false
             }
-            parsed != null && !parsed.isEmpty -> suggestions = parsed
         }
     }
 
@@ -239,9 +344,32 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
             }
         } else null
         val files = pending.toList()
+        val meds = extraMeds.toList()
+        val medsReminders = extraMedsReminders
+        val remindThis = remindOnSave && original == null && (type == HealthType.MEDICACAO || type == HealthType.SUPLEMENTACAO)
+        val rx = rxSource
         scope.launch {
             val id = repo.save(record, results, files)
             saved[0] = true
+            var alarms = 0
+            val dao = container.database.healthEventDao()
+            if (remindThis) {
+                runCatching { alarms += TakeReminders.createFor(context.applicationContext, dao, record.copy(id = id)) }
+            }
+            var created = 0
+            if (meds.isNotEmpty()) {
+                val source = rx ?: Prescription(date = LocalDate.ofEpochDay(day), doctor = professional.trim().ifBlank { null })
+                runCatching {
+                    val (n, a) = TakeReminders.saveMedicines(context.applicationContext, repo, dao, source, meds, medsReminders)
+                    created = n
+                    alarms += a
+                }
+            }
+            val msg = listOfNotNull(
+                if (created > 0) "$created ${if (created == 1) "remédio salvo" else "remédios salvos"} em Medicação" else null,
+                if (alarms > 0) "$alarms ${if (alarms == 1) "lembrete criado" else "lembretes criados"}" else null,
+            ).joinToString(" · ")
+            if (msg.isNotBlank()) Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
             saving = false
             onSaved(id)
         }
@@ -287,7 +415,9 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
                                 reportExam -> "Anexe o laudo"
                                 type == HealthType.OFTALMOLOGIA -> "Ler a receita de óculos"
                                 spec.hasValues -> "Ler dados do laudo"
-                                else -> "Anexar arquivo"
+                                type == HealthType.MEDICACAO -> "Ler a receita"
+                                type == HealthType.SUPLEMENTACAO -> "Foto do rótulo"
+                                else -> "Anexar e ler arquivo"
                             },
                             style = MaterialTheme.typography.titleMedium,
                         )
@@ -297,7 +427,10 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
                                 type == HealthType.OFTALMOLOGIA -> "Escolha o PDF ou a foto da receita. O app lê o grau de cada olho (OD e OE), a acuidade, a pressão do olho e os diagnósticos para você conferir."
                                 type == HealthType.BIOIMPEDANCIA -> "Escolha o PDF ou a foto do resultado. O app pega só o essencial: peso, % de gordura, massa muscular, água, gordura visceral, TMB, idade metabólica e IMC."
                                 spec.hasValues -> "Escolha o PDF ou a foto do laudo. O app lê o texto no próprio celular e sugere a data, o laboratório e os valores para você conferir."
-                                else -> "Receita, pedido, relatório... em PDF ou foto (JPG, PNG, WEBP, HEIC). Fica guardado só no celular."
+                                type == HealthType.MEDICACAO -> "Escolha a foto ou o PDF da receita. O app lê o médico, a data e cada remédio com a dose, como tomar e por quantos dias, e oferece lembretes."
+                                type == HealthType.CONSULTA -> "Receita, pedido ou relatório em PDF ou foto. O app lê o médico, a especialidade, a data e os remédios receitados para você conferir."
+                                type == HealthType.SUPLEMENTACAO -> "Opcional. Tire foto do rótulo: o app tenta ler o nome, a marca e a dose."
+                                else -> "Receita, pedido, relatório... em PDF ou foto (JPG, PNG, WEBP, HEIC). O app preenche o que conseguir ler. Fica guardado só no celular."
                             },
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodyMedium,
@@ -327,17 +460,71 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
                         }) { Icon(Icons.Filled.Close, "Tirar arquivo") }
                     }
                 }
+                // Com a IA do usuário conectada: leitura mais completa dos campos vazios.
+                if (aiConnected && (pending.isNotEmpty() || savedFiles.isNotEmpty())) {
+                    OutlinedButton(onClick = { readWithAi() }, enabled = !aiBusy, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                        if (aiBusy) {
+                            CircularProgressIndicator(Modifier.size(22.dp))
+                            Text("  Lendo com sua IA…")
+                        } else {
+                            Icon(Icons.Filled.AutoAwesome, null)
+                            Text("  Ler com minha IA")
+                        }
+                    }
+                    Text(
+                        "Envia as páginas do arquivo para a IA que você conectou e preenche os campos que ficaram vazios.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (missing.isNotEmpty()) {
+                    Text(
+                        "Os campos destacados com \"Preencher\" não foram lidos do arquivo.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+            }
+        }
+        // Suplementos já cadastrados: escolher rápido.
+        if (type == HealthType.SUPLEMENTACAO && original == null) {
+            val quick = supplements.distinctBy { Repository.normalize(it.title) }.take(12)
+            if (quick.isNotEmpty()) {
+                item(key = "quick") {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Escolher rápido", fontWeight = FontWeight.Bold)
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            quick.forEach { r ->
+                                val e = HealthRepository.decodeExtra(r.extra)
+                                AssistChip(
+                                    onClick = {
+                                        title = r.title
+                                        listOf("marca", "dose", "horario").forEach { k -> e[k]?.let { extras[k] = it } }
+                                        if (professional.isBlank()) r.professional?.let { professional = it }
+                                        if (place.isBlank()) r.place?.let { place = it }
+                                        if (extras["inicio"].isNullOrBlank()) extras["inicio"] = LocalDate.now().toString()
+                                        status = "Em uso"
+                                    },
+                                    label = { Text(listOfNotNull(r.title, e["marca"]).joinToString(" · ")) },
+                                )
+                            }
+                        }
+                        Text("Toque para usar os dados de um suplemento que você já cadastrou.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
         }
         item {
             DateField(
                 label = if (type == HealthType.MEDICACAO) "Data do registro" else "Data",
                 epochDay = day,
-                onChange = { it?.let { d -> day = d } },
+                onChange = { it?.let { d -> day = d; dateTouched = true; missing.remove(DocumentAutoFill.DATE) } },
+                highlight = marked(DocumentAutoFill.DATE),
                 help = when (type) {
                     HealthType.EXAME -> if (reportExam) "Dia em que o exame foi feito" else "Dia da coleta do exame"
                     HealthType.OFTALMOLOGIA -> "Dia da consulta ou da receita"
                     HealthType.MEDICACAO -> "Dia em que você anotou ou recebeu a receita"
+                    HealthType.SUPLEMENTACAO -> "Dia em que você cadastrou"
                     else -> "Dia do atendimento"
                 },
             )
@@ -346,6 +533,7 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
             HelpField(
                 title, { title = it }, spec.titleLabel,
                 if (reportExam) "Ex.: Ultrassonografia de abdome total, ressonância do joelho" else spec.titleHelp,
+                highlight = marked(DocumentAutoFill.TITLE),
             )
         }
         item {
@@ -356,19 +544,20 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
                     if (reportExam) "Clínica ou laboratório *" else spec.placeLabel,
                     if (reportExam) "Onde o exame foi feito. Ex.: Clínica Imagem Total" else spec.placeHelp,
                     error = if (placeError) "Diga em que ${if (reportExam) "clínica ou laboratório" else "laboratório"} o exame foi feito" else null,
+                    highlight = marked(DocumentAutoFill.PLACE),
                 )
                 Suggestions(places, place) { place = it; placeError = false }
             }
         }
         item {
             Column {
-                HelpField(professional, { professional = it }, spec.professionalLabel, spec.professionalHelp)
+                HelpField(professional, { professional = it }, spec.professionalLabel, spec.professionalHelp, highlight = marked(DocumentAutoFill.PROFESSIONAL))
                 Suggestions(professionals, professional) { professional = it }
             }
         }
         if (type == HealthType.OFTALMOLOGIA) {
             item(key = "eyes") {
-                EyeFields(values = extras, onChange = { k, v -> if (v.isBlank()) { extras.remove(k) } else { extras[k] = v } })
+                EyeFields(values = extras, missing = missing.toSet(), onChange = { k, v -> if (v.isBlank()) { extras.remove(k) } else { extras[k] = v } })
             }
             item(key = "eye_diagnoses") {
                 EyeDiagnoses(
@@ -400,10 +589,53 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
                     },
                     help = f.help,
                     clearable = true,
+                    highlight = marked(f.key) && v.isBlank(),
                 )
-                FieldKind.LONG_TEXT -> HelpField(v, { extras[f.key] = it }, f.label, f.help, multiline = true)
-                FieldKind.NUMBER -> HelpField(v, { new -> if (new.all { c -> c.isDigit() }) { extras[f.key] = new } }, f.label, f.help, number = true)
-                FieldKind.TEXT -> HelpField(v, { extras[f.key] = it }, f.label, f.help)
+                FieldKind.LONG_TEXT -> HelpField(v, { extras[f.key] = it }, f.label, f.help, multiline = true, highlight = marked(f.key))
+                FieldKind.NUMBER -> HelpField(v, { new -> if (new.all { c -> c.isDigit() }) { extras[f.key] = new } }, f.label, f.help, number = true, highlight = marked(f.key))
+                FieldKind.TEXT -> HelpField(v, { extras[f.key] = it }, f.label, f.help, highlight = marked(f.key))
+            }
+        }
+        // Lembretes de tomar (só ao cadastrar).
+        if (original == null && (type == HealthType.MEDICACAO || type == HealthType.SUPLEMENTACAO)) {
+            item(key = "remind") {
+                Panel {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Lembrar de tomar", fontWeight = FontWeight.Bold)
+                            val plan = TakeReminders.planFor(type, day, extras.toMap())
+                            Text(
+                                if (remindOnSave) "Ao salvar, cria avisos ${plan.describe()}. Dá para mudar no Calendário."
+                                else "Cria avisos no calendário nos horários da ${if (type == HealthType.SUPLEMENTACAO) "frequência" else "receita"}.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(checked = remindOnSave, onCheckedChange = { remindOnSave = it; if (it) askNotifications() })
+                    }
+                }
+            }
+        }
+        // Remédios da receita que serão salvos junto.
+        if (extraMeds.isNotEmpty()) {
+            item(key = "extra_meds") {
+                Panel {
+                    Overline("Também vão para Medicação")
+                    extraMeds.forEach { m ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(m.name, fontWeight = FontWeight.Bold)
+                                Text(medicineSummary(m), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            IconButton(onClick = { extraMeds.remove(m) }) { Icon(Icons.Filled.Close, "Tirar ${m.name}") }
+                        }
+                    }
+                    Text(
+                        if (extraMedsReminders) "Serão salvos ao tocar em Salvar, com lembretes." else "Serão salvos ao tocar em Salvar.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
         if (spec.statuses.isNotEmpty()) {
@@ -472,6 +704,22 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
             text = { Text("O que você preencheu será perdido.") },
             confirmButton = { TextButton(onClick = { confirmExit = false; onBack() }) { Text("Sair sem salvar", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { confirmExit = false; save() }) { Text("Salvar") } },
+        )
+    }
+    prescriptionAsk?.let { rx ->
+        PrescriptionDialog(
+            prescription = rx,
+            note = if (type == HealthType.MEDICACAO) "O primeiro remédio da receita já está no formulário. Escolha os outros que também quer salvar em Medicação."
+            else "Escolha os remédios que quer salvar em Medicação. Eles são salvos quando você tocar em Salvar.",
+            confirmLabel = "Salvar junto",
+            onConfirm = { meds, reminders ->
+                extraMeds.clear()
+                extraMeds.addAll(meds)
+                extraMedsReminders = reminders
+                if (type == HealthType.MEDICACAO && reminders && rxSource?.medicines?.firstOrNull()?.asNeeded != true) remindOnSave = true
+            },
+            onDismiss = { prescriptionAsk = null },
+            askNotifications = askNotifications,
         )
     }
     eyeSuggestion?.let { eye ->
@@ -627,7 +875,7 @@ private fun AddItemDialog(items: List<LabItem>, present: Set<String>, onPick: (L
 
 /** Grau e medidas de cada olho, lado a lado: OD (direito) e OE (esquerdo). */
 @Composable
-private fun EyeFields(values: Map<String, String>, onChange: (String, String) -> Unit) {
+private fun EyeFields(values: Map<String, String>, missing: Set<String>, onChange: (String, String) -> Unit) {
     Panel {
         Overline("Receita e exame dos olhos")
         Text(
@@ -641,10 +889,13 @@ private fun EyeFields(values: Map<String, String>, onChange: (String, String) ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("od" to "OD", "oe" to "OE").forEach { (eye, label) ->
                         val key = HealthFields.eyeKey(eye, m.key)
+                        val mark = key in missing && values[key].isNullOrBlank()
                         OutlinedTextField(
                             value = values[key].orEmpty(),
                             onValueChange = { onChange(key, it) },
                             label = { Text(label) },
+                            supportingText = if (mark) { { Text("Preencher") } } else null,
+                            colors = if (mark) fillColors() else OutlinedTextFieldDefaults.colors(),
                             singleLine = true,
                             modifier = Modifier.weight(1f),
                         )

@@ -124,6 +124,37 @@ class PrescriptionParserTest {
     }
 
     @Test
+    fun controlledPrescriptionForm() {
+        val text = """
+            RECEITUÁRIO DE CONTROLE ESPECIAL
+            IDENTIFICAÇÃO DO EMITENTE
+            Nome: Dra. Carla Mendes Rocha
+            CRM: 445566  UF: SP
+            Psiquiatria
+            Paciente: Pedro Alves
+            Endereço: Rua A, 10
+            Prescrição:
+            Sertralina 50mg -------- 30 comprimidos
+            Tomar 1 comprimido pela manhã, uso contínuo
+            Clonazepam 0,5 mg ....... 1 caixa
+            1 cp à noite por 30 dias
+            1ª via farmácia
+            Data: 02/10/2026
+        """.trimIndent()
+        val p = PrescriptionParser.parse(text, today)
+        assertEquals("Dra. Carla Mendes Rocha", p.doctor)
+        assertEquals("CRM 445566", p.crm)
+        assertEquals("Psiquiatria", p.specialty)
+        assertEquals(LocalDate.of(2026, 10, 2), p.date)
+        assertEquals(listOf("Sertralina", "Clonazepam"), p.medicines.map { it.name })
+        assertTrue(p.medicines[0].continuous)
+        assertEquals("1 comprimido pela manhã", p.medicines[0].posology)
+        assertEquals("0,5 mg, 1 cp", p.medicines[1].dose)
+        assertEquals(30, p.medicines[1].durationDays)
+        assertEquals(listOf(21 * 60), MedicationSchedule.times(p.medicines[1].posology))
+    }
+
+    @Test
     fun notAPrescription() {
         val p = PrescriptionParser.parse("Hemoglobina 14,2 g/dL\nLeucócitos 6.500 /mm3\nLaboratório Sabin", today)
         assertNull(p.doctor)
