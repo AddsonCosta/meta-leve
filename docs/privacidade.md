@@ -39,7 +39,7 @@ Todos os dados ficam **somente no seu aparelho**, no armazenamento interno do ap
 O aplicativo não usa publicidade, ferramentas de análise ou rastreamento.
 
 ## Backup
-Se você usar a opção **Exportar backup**, o aplicativo grava um arquivo com seus dados, fotos e anexos no local que você escolher. A partir daí, esse arquivo fica sob seu controle. O backup automático do Android também pode incluir os dados do aplicativo na sua conta Google, conforme as configurações do seu aparelho.
+O backup só vai para onde você escolher: no **Google Drive automático**, você escolhe um arquivo no seu próprio Google Drive (pelo seletor de arquivos do Android) e o Evolui regrava esse arquivo uma vez por dia; no **Enviar por e-mail**, o arquivo é anexado no app de e-mail que você escolher, para o destinatário que você escolher. O Evolui não tem servidor e não recebe esse arquivo; ele fica sob o seu controle. O backup automático do Android também pode incluir os dados do aplicativo na sua conta Google, conforme as configurações do seu aparelho, exceto a chave da sua IA, que nunca sai do celular.
 
 ## Como apagar seus dados
 Desinstale o aplicativo ou limpe os dados dele em Configurações > Aplicativos > Evolui > Armazenamento. Isso apaga tudo o que ele guardou no aparelho.

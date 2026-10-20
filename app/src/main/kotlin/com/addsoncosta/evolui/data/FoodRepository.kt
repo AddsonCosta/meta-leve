@@ -98,6 +98,9 @@ class FoodRepository(private val db: AppDatabase) {
 
     fun recents(limit: Int): Flow<List<FoodEntity>> = foods.observeRecent(limit)
 
+    /** Os alimentos que a pessoa mais registra neste tipo de refeição. */
+    fun frequent(type: MealType, limit: Int): Flow<List<FoodEntity>> = foods.observeFrequent(type.name, limit)
+
     fun browse(category: String?): Flow<List<FoodEntity>> = foods.observeBrowse(category)
 
     fun categories(): Flow<List<String>> = foods.observeCategories()
@@ -159,6 +162,7 @@ class FoodRepository(private val db: AppDatabase) {
 
     /** Registra todos os itens da refeição salva no dia escolhido. */
     suspend fun logSavedMeal(meal: SavedMeal, date: LocalDate, type: MealType) {
+        if (meal.items.isEmpty()) return
         db.mealDao().insertAll(
             meal.items.map {
                 MealEntity(
@@ -179,11 +183,14 @@ class FoodRepository(private val db: AppDatabase) {
     }
 
     companion object {
+        /** Alimentos montados na hora (ex.: estimados pela IA) têm id 0 ou negativo e não existem no banco. */
+        private fun storedId(food: FoodEntity): Long? = food.id.takeIf { it > 0 }
+
         fun mealFor(date: LocalDate, food: FoodEntity, choice: PortionChoice, mealType: MealType): MealEntity {
             val n = food.nutritionFor(choice.grams)
             return MealEntity(
                 epochDay = date.toEpochDay(),
-                foodId = food.id,
+                foodId = storedId(food),
                 name = food.name,
                 grams = choice.grams,
                 mealType = mealType.name,
@@ -200,7 +207,7 @@ class FoodRepository(private val db: AppDatabase) {
             val n = food.nutritionFor(choice.grams)
             return SavedMealItemEntity(
                 savedMealId = 0,
-                foodId = food.id,
+                foodId = storedId(food),
                 name = food.name,
                 grams = choice.grams,
                 kcal = n.kcal,

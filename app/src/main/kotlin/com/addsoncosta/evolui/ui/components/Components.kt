@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -25,6 +26,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import java.text.NumberFormat
@@ -143,11 +145,19 @@ fun Stat(value: String, label: String, modifier: Modifier = Modifier, color: Col
     }
 }
 
-/** Linha com rótulo à esquerda e valor à direita. */
+/**
+ * Linha com rótulo à esquerda e valor à direita. O rótulo usa a largura natural (com limite),
+ * e o valor ocupa o resto, quebrando linha alinhado à direita. Assim um valor longo nunca
+ * espreme o rótulo em uma letra por linha.
+ */
 @Composable
-fun KeyValue(key: String, value: String) {
-    Row(Modifier.fillMaxWidth()) {
-        Text(key, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, fontWeight = FontWeight.Bold)
+fun KeyValue(key: String, value: String, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Text(
+            key,
+            Modifier.widthIn(max = 160.dp).padding(end = 12.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(value, Modifier.weight(1f), fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
     }
 }

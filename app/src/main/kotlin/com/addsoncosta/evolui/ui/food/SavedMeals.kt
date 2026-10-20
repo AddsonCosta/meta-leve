@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -72,13 +74,17 @@ data class SavedMealDraft(
 
 private fun defaultMealName(type: MealType) = "Meu " + type.label.lowercase()
 
+/** Aviso depois de registrar: "Registrado no Almoço: 520 kcal". */
+internal fun loggedMessage(type: MealType, kcal: Double) = "Registrado no ${type.label}: ${kcal.fmt()} kcal"
+
 /** Lista curta das refeições salvas, na tela Comer. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SavedMealsPanel(
     meals: List<SavedMeal>,
+    dayLabel: String,
     onLog: (SavedMeal) -> Unit,
-    onEdit: (SavedMeal) -> Unit,
+    onQuickLog: (SavedMeal) -> Unit,
     onSaveDay: () -> Unit,
     onNew: () -> Unit,
 ) {
@@ -87,7 +93,8 @@ internal fun SavedMealsPanel(
         Text("Refeições salvas", style = MaterialTheme.typography.titleMedium)
         if (meals.isEmpty()) {
             Text(
-                "Salve o que você come sempre (ex.: \"Meu café\" = café + tapioca + ovo) e registre tudo de uma vez com um toque.",
+                "Salve o que você come sempre (ex.: \"Meu café\" = café + tapioca + ovo) e registre tudo de uma vez " +
+                    "com um toque em Registrar.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -126,10 +133,17 @@ internal fun SavedMealsPanel(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    IconButton(onClick = { onEdit(meal) }) { Icon(Icons.Filled.Edit, "Editar ${meal.meal.name}") }
+                    FilledTonalButton(onClick = { onQuickLog(meal) }, enabled = meal.items.isNotEmpty()) {
+                        Icon(Icons.Filled.Add, null, Modifier.size(18.dp))
+                        Text(" Registrar")
+                    }
                 }
             }
-            Text("Toque numa refeição para registrar tudo de uma vez.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "Registrar soma tudo em $dayLabel, na refeição de costume. Toque no nome para escolher outra refeição ou editar.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onSaveDay) { Text("Salvar refeição do dia") }
@@ -226,6 +240,8 @@ internal fun SavedMealEditor(
     onChange: (SavedMealDraft) -> Unit,
     onAddFood: () -> Unit,
     onSave: () -> Unit,
+    onSaveAndLog: () -> Unit,
+    dayLabel: String,
     onDelete: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -298,13 +314,20 @@ internal fun SavedMealEditor(
         }
         item(key = "salvar") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = onSave,
-                    enabled = draft.name.isNotBlank() && draft.items.isNotEmpty(),
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Salvar refeição") }
-                if (draft.name.isBlank() || draft.items.isEmpty()) {
+                val ok = draft.name.isNotBlank() && draft.items.isNotEmpty()
+                Button(onClick = onSaveAndLog, enabled = ok, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (dayLabel == "hoje") "Salvar e registrar hoje" else "Salvar e registrar em $dayLabel")
+                }
+                OutlinedButton(onClick = onSave, enabled = ok, modifier = Modifier.fillMaxWidth()) { Text("Só salvar") }
+                if (!ok) {
                     Text("Dê um nome e adicione pelo menos um alimento.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Text(
+                        "\"Salvar e registrar\" soma ${draft.items.sumOf { it.kcal }.fmt()} kcal no ${draft.type.label}. " +
+                            "\"Só salvar\" guarda a refeição para registrar depois com um toque.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 if (draft.id != 0L) {
                     TextButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth()) {

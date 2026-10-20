@@ -9,9 +9,13 @@ import com.addsoncosta.evolui.core.EnergyCalculator
 import com.addsoncosta.evolui.core.Profile
 import com.addsoncosta.evolui.data.DayLogEntity
 import com.addsoncosta.evolui.data.MealEntity
+import com.addsoncosta.evolui.data.RoutineDayEntry
+import com.addsoncosta.evolui.data.RoutineEntryEntity
+import com.addsoncosta.evolui.data.RoutineRepository
 import com.addsoncosta.evolui.data.WorkoutEntity
 import com.addsoncosta.evolui.data.WorkoutRepository
 import com.addsoncosta.evolui.health.HealthDay
+import com.addsoncosta.evolui.ui.exercise.PersonInfo
 import java.time.LocalDate
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -22,10 +26,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+
+/** Uma atividade da rotina no dia, com as kcal acima do repouso. */
+data class RoutineItem(val entry: RoutineEntryEntity, val skipped: Boolean, val kcal: Double)
 
 data class TodayState(
     val date: LocalDate,
@@ -36,7 +44,16 @@ data class TodayState(
     val meals: List<MealEntity>,
     val workouts: List<WorkoutEntity>,
     val summary: DaySummary,
+    /** Rotina do dia a dia que vale hoje (marcadas e desmarcadas). */
+    val routine: List<RoutineItem> = emptyList(),
+    /** Há rotina cadastrada (mesmo que não valha neste dia da semana). */
+    val hasRoutine: Boolean = false,
 ) {
+    /** kcal dos treinos (sem a rotina). */
+    val workoutKcal get() = workouts.sumOf { it.kcal }
+    /** kcal da rotina que contam no dia (só as marcadas). */
+    val routineKcal get() = routine.filter { !it.skipped }.sumOf { it.kcal }
+
     val eatenProtein get() = meals.sumOf { it.protein }
     val eatenCarb get() = meals.sumOf { it.carb }
     val eatenFat get() = meals.sumOf { it.fat }
@@ -46,19 +63,32 @@ data class TodayState(
 class TodayViewModel(private val container: AppContainer) : ViewModel() {
     private val repo = container.repository
     private val workoutRepo = WorkoutRepository(container)
+    private val routineRepo = RoutineRepository(container.database)
     val date = container.selectedDate
 
-    private data class DayData(val log: DayLogEntity?, val latestWeight: Double?, val meals: List<MealEntity>, val workouts: List<WorkoutEntity>)
+    private data class DayData(
+        val log: DayLogEntity?,
+        val latestWeight: Double?,
+        val meals: List<MealEntity>,
+        val workouts: List<WorkoutEntity>,
+        val routine: List<RoutineDayEntry>,
+    )
 
     private val dayData = date.flatMapLatest { d ->
-        combine(repo.dayLog(d), repo.latestWeight(d), repo.meals(d), repo.workouts(d)) { log, w, meals, workouts ->
-            DayData(log, w, meals, workouts)
+        combine(repo.dayLog(d), repo.latestWeight(d), repo.meals(d), repo.workouts(d), routineRepo.day(d)) { log, w, meals, workouts, routine ->
+            DayData(log, w, meals, workouts, routine)
         }
     }
 
-    val state: StateFlow<TodayState?> = combine(date, repo.profile.filterNotNull(), dayData) { d, profile, data ->
+    private val hasRoutine = routineRepo.entries().map { it.isNotEmpty() }
+
+    val state: StateFlow<TodayState?> = combine(date, repo.profile.filterNotNull(), dayData, hasRoutine) { d, profile, data, anyRoutine ->
         val weight = data.latestWeight ?: profile.startWeightKg
         val activity = data.log?.activity?.let { ActivityLevel.valueOf(it) } ?: profile.defaultActivity
+        // Rotina: só o gasto acima do repouso, com a mesma fórmula dos treinos (repouso da pessoa).
+        val person = PersonInfo.from(profile, weight, d)
+        val routine = data.routine.map { RoutineItem(it.entry, it.skipped, person.netKcal(it.entry.met, it.entry.minutes)) }
+        val burned = data.workouts.sumOf { it.kcal } + routine.filter { !it.skipped }.sumOf { it.kcal }
         TodayState(
             date = d,
             profile = profile,
@@ -67,7 +97,9 @@ class TodayViewModel(private val container: AppContainer) : ViewModel() {
             activity = activity,
             meals = data.meals,
             workouts = data.workouts,
-            summary = EnergyCalculator.summary(profile, d, weight, activity, data.meals.sumOf { it.kcal }, data.workouts.sumOf { it.kcal }),
+            summary = EnergyCalculator.summary(profile, d, weight, activity, data.meals.sumOf { it.kcal }, burned),
+            routine = routine,
+            hasRoutine = anyRoutine,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -122,6 +154,10 @@ class TodayViewModel(private val container: AppContainer) : ViewModel() {
     fun setActivity(level: ActivityLevel) = viewModelScope.launch { repo.updateDay(date.value) { it.copy(activity = level.name) } }
 
     fun setNote(note: String) = viewModelScope.launch { repo.updateDay(date.value) { it.copy(note = note.ifBlank { null }) } }
+
+    /** Marca ou desmarca uma atividade da rotina só neste dia. */
+    fun setRoutineSkipped(entry: RoutineEntryEntity, skipped: Boolean) =
+        viewModelScope.launch { routineRepo.setSkipped(entry, date.value, skipped) }
 
     fun deleteMeal(meal: MealEntity) = viewModelScope.launch { repo.deleteMeal(meal) }
 

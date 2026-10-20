@@ -3,6 +3,9 @@ package com.addsoncosta.evolui.data
 import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
+import com.addsoncosta.evolui.backup.MissingFiles
+import com.addsoncosta.evolui.backup.OmittedFile
+import com.addsoncosta.evolui.backup.pdfPageCount
 import com.addsoncosta.evolui.core.Profile
 import java.io.File
 import java.io.InputStream
@@ -22,6 +25,9 @@ import kotlinx.serialization.json.Json
 
 class Repository(private val context: Context, private val db: AppDatabase) {
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = false }
+
+    /** Fotos e anexos que não vieram no último backup restaurado (backup sem fotos e anexos). */
+    val missingFiles = MissingFiles(context)
 
     val profile: Flow<Profile?> = db.profileDao().observe().map { it?.toProfile() }
 
@@ -196,9 +202,15 @@ class Repository(private val context: Context, private val db: AppDatabase) {
         ExerciseSeed.upgrade(context, db)
     }
 
-    suspend fun exportBackup(): String = withContext(Dispatchers.IO) {
+    /**
+     * Dados do backup em JSON. Com [includeFiles] falso, o .zip não leva fotos nem anexos e o JSON guarda
+     * uma descrição de cada arquivo deixado de fora ([Backup.omittedFiles]).
+     */
+    suspend fun exportBackup(includeFiles: Boolean = true): String = withContext(Dispatchers.IO) {
         val backup = Backup(
             version = Backup.VERSION,
+            includesFiles = includeFiles,
+            omittedFiles = if (includeFiles) emptyList() else describeFiles(),
             profile = db.profileDao().get(),
             days = db.dayLogDao().all(),
             customFoods = db.foodDao().customFoods(),
@@ -220,6 +232,7 @@ class Repository(private val context: Context, private val db: AppDatabase) {
             teeth = db.toothStateDao().all(),
             cycles = db.menstrualCycleDao().all(),
             bloodPressure = db.bloodPressureDao().all(),
+            routine = db.routineDao().all(),
         )
         json.encodeToString(Backup.serializer(), backup)
     }
@@ -227,13 +240,14 @@ class Repository(private val context: Context, private val db: AppDatabase) {
     /**
      * Backup completo em .zip: os dados (backup.json) mais as fotos de progresso e os anexos da Saúde.
      */
-    suspend fun exportBackupZip(out: OutputStream) = withContext(Dispatchers.IO) {
-        val text = exportBackup()
+    suspend fun exportBackupZip(out: OutputStream, includeFiles: Boolean = true) = withContext(Dispatchers.IO) {
+        val text = exportBackup(includeFiles)
         ZipOutputStream(out.buffered()).use { zip ->
             zip.putNextEntry(ZipEntry(BACKUP_JSON))
             zip.write(text.toByteArray())
             zip.closeEntry()
-            for (dir in listOf(photoDir(), File(context.filesDir, ANEXOS_DIR))) {
+            val dirs = if (includeFiles) listOf(photoDir(), File(context.filesDir, ANEXOS_DIR)) else emptyList()
+            for (dir in dirs) {
                 dir.listFiles()?.filter { it.isFile }?.forEach { file ->
                     zip.putNextEntry(ZipEntry("${dir.name}/${file.name}"))
                     file.inputStream().use { it.copyTo(zip) }
@@ -241,6 +255,80 @@ class Repository(private val context: Context, private val db: AppDatabase) {
                 }
             }
         }
+    }
+
+    /** Descrição de cada foto de progresso e anexo da Saúde, para um backup sem os arquivos. */
+    private suspend fun describeFiles(): List<OmittedFile> {
+        val records = db.healthRecordDao().all().associateBy { it.id }
+        val valuesByRecord = db.labResultDao().all().groupingBy { it.recordId }.eachCount()
+        val anexos = File(context.filesDir, ANEXOS_DIR)
+        val photos = db.photoDao().all().map { ph ->
+            val file = File(photoDir(), ph.fileName)
+            OmittedFile(
+                kind = OmittedFile.KIND_PHOTO,
+                folder = photoDir().name,
+                fileName = ph.fileName,
+                epochDay = ph.epochDay,
+                photoId = ph.id,
+                weightKg = ph.weightKg,
+                sizeBytes = file.length().takeIf { file.exists() },
+                photo = ph,
+            )
+        }
+        val attachments = db.healthAttachmentDao().all().map { a ->
+            val record = records[a.recordId]
+            val file = File(anexos, a.fileName)
+            val kind = OmittedFile.kindFor(a.mimeType)
+            val typeName = record?.let { r -> HealthType.entries.firstOrNull { it.name == r.type }?.singular ?: "Registro" }
+            OmittedFile(
+                kind = kind,
+                folder = ANEXOS_DIR,
+                fileName = a.fileName,
+                originalName = a.originalName,
+                epochDay = record?.epochDay,
+                addedMillis = a.addedMillis,
+                recordId = a.recordId,
+                recordLabel = record?.let { r -> if (r.title.isBlank()) typeName else "$typeName: ${r.title}" },
+                pages = if (kind == OmittedFile.KIND_PDF && file.exists()) pdfPageCount(file) else null,
+                valuesRead = valuesByRecord[a.recordId] ?: 0,
+                readText = a.ocrText?.trim()?.take(OmittedFile.READ_TEXT_LIMIT)?.takeIf { it.isNotEmpty() },
+                sizeBytes = file.length().takeIf { file.exists() },
+            )
+        }
+        return photos + attachments
+    }
+
+    /**
+     * Põe de volta o arquivo de uma foto ou anexo que não veio no backup: copia [uri] com o mesmo nome interno,
+     * para o registro restaurado voltar a abrir o arquivo. Devolve falso se não conseguir ler.
+     */
+    suspend fun reattachFile(item: OmittedFile, uri: Uri): Boolean = withContext(Dispatchers.IO) {
+        val name = File(item.fileName).name
+        if (name.isBlank() || name.startsWith(".")) return@withContext false
+        val dir = if (item.isPhoto) photoDir() else File(context.filesDir, ANEXOS_DIR).apply { mkdirs() }
+        val target = File(dir, name)
+        val copied = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { input -> target.outputStream().use { input.copyTo(it) } } != null
+        }.getOrDefault(false)
+        if (!copied) return@withContext false
+        if (item.isPhoto) {
+            val photo = item.photo?.copy(fileName = name)
+                ?: PhotoEntity(epochDay = item.epochDay ?: LocalDate.now().toEpochDay(), fileName = name, weightKg = item.weightKg)
+            val exists = photo.id != 0L && db.photoDao().get(photo.id) != null
+            if (!exists) {
+                runCatching { db.photoDao().insert(photo) }.recoverCatching { db.photoDao().insert(photo.copy(id = 0)) }
+            }
+        } else {
+            val mime = context.contentResolver.getType(uri)
+            val recordId = item.recordId
+            if (mime != null && recordId != null) {
+                db.healthAttachmentDao().forRecord(recordId).firstOrNull { it.fileName == name }?.let { row ->
+                    if (row.mimeType != mime) db.healthAttachmentDao().save(row.copy(mimeType = mime))
+                }
+            }
+        }
+        missingFiles.remove(item.fileName)
+        true
     }
 
     /** Restaura um backup .zip (ou o .json antigo, se o arquivo não for zip). */
@@ -297,6 +385,8 @@ class Repository(private val context: Context, private val db: AppDatabase) {
             db.toothStateDao().clear()
             db.menstrualCycleDao().clear()
             db.bloodPressureDao().clear()
+            db.routineDao().clear()
+            db.routineDao().clearAllSkips()
             // Fotos: backups antigos (só .json) não trazem as fotos; nesse caso mantém as atuais.
             if (backup.version >= 3) db.photoDao().clear()
 
@@ -308,7 +398,10 @@ class Repository(private val context: Context, private val db: AppDatabase) {
             db.mealDao().insertAll(backup.meals)
             db.workoutDao().insertAll(backup.workouts)
             db.fastDao().insertAll(backup.fasts)
-            if (backup.version >= 3) db.photoDao().insertAll(backup.photos)
+            // Backup sem fotos: só volta a foto cujo arquivo já está no celular; as outras ficam em [missingFiles].
+            if (backup.version >= 3) {
+                db.photoDao().insertAll(if (backup.includesFiles) backup.photos else backup.photos.filter { photoFile(it).exists() })
+            }
             db.foodPortionDao().insertAll(backup.customPortions)
             backup.savedMeals.forEach { db.savedMealDao().insert(it) }
             db.savedMealDao().insertItems(backup.savedMealItems)
@@ -321,7 +414,16 @@ class Repository(private val context: Context, private val db: AppDatabase) {
             db.toothStateDao().saveAll(backup.teeth)
             db.menstrualCycleDao().insertAll(backup.cycles)
             db.bloodPressureDao().insertAll(backup.bloodPressure)
+            db.routineDao().insertAll(backup.routine)
         }
+        // Arquivos que ficaram de fora do backup e não existem neste celular: o registro mostra o aviso para anexar de novo.
+        missingFiles.replaceAll(
+            if (backup.includesFiles) emptyList()
+            else backup.omittedFiles.filter { item ->
+                val name = File(item.fileName).name
+                name.isNotBlank() && !File(if (item.isPhoto) photoDir() else File(context.filesDir, ANEXOS_DIR), name).exists()
+            },
+        )
     }
 
     private fun readAsset(name: String) = context.assets.open(name).bufferedReader().use { it.readText() }
@@ -375,9 +477,15 @@ data class Backup(
     val teeth: List<ToothStateEntity> = emptyList(),
     val cycles: List<MenstrualCycleEntity> = emptyList(),
     val bloodPressure: List<BloodPressureEntity> = emptyList(),
+    /** Rotina do dia a dia (versão 0.5.0 em diante). */
+    val routine: List<RoutineEntryEntity> = emptyList(),
+    /** Falso quando o .zip foi feito "sem fotos e anexos" (versão 4 em diante). */
+    val includesFiles: Boolean = true,
+    /** Descrição de cada foto ou anexo deixado de fora (só quando [includesFiles] é falso). */
+    val omittedFiles: List<OmittedFile> = emptyList(),
 ) {
     companion object {
-        const val VERSION = 3
+        const val VERSION = 4
     }
 }
 

@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
@@ -80,7 +81,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 
-private enum class ExerciseTab { REGISTER, HISTORY }
+private enum class ExerciseTab { REGISTER, ROUTINE, HISTORY }
 
 /** Seção Treino: registrar exercícios (com busca) e ver o histórico de atividades. */
 @Composable
@@ -89,18 +90,24 @@ fun ExerciseScreen() {
     val vm: ExerciseViewModel = viewModel(factory = viewModelFactory { initializer { ExerciseViewModel(container) } })
     var tab by rememberSaveable { mutableStateOf(ExerciseTab.REGISTER) }
 
-    BackHandler(enabled = tab == ExerciseTab.HISTORY) { tab = ExerciseTab.REGISTER }
+    BackHandler(enabled = tab != ExerciseTab.REGISTER) { tab = ExerciseTab.REGISTER }
 
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
             Overline("Treino")
             Text("Exercícios", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = tab == ExerciseTab.REGISTER,
                     onClick = { tab = ExerciseTab.REGISTER },
                     label = { Text("Registrar") },
                     leadingIcon = { Icon(Icons.Filled.Add, null) },
+                )
+                FilterChip(
+                    selected = tab == ExerciseTab.ROUTINE,
+                    onClick = { tab = ExerciseTab.ROUTINE },
+                    label = { Text("Minha rotina") },
+                    leadingIcon = { Icon(Icons.Filled.EventRepeat, null) },
                 )
                 FilterChip(
                     selected = tab == ExerciseTab.HISTORY,
@@ -112,6 +119,7 @@ fun ExerciseScreen() {
         }
         when (tab) {
             ExerciseTab.REGISTER -> RegisterTab(vm, Modifier.weight(1f))
+            ExerciseTab.ROUTINE -> RoutineTab(vm, Modifier.weight(1f))
             ExerciseTab.HISTORY -> HistoryTab(vm, Modifier.weight(1f))
         }
     }

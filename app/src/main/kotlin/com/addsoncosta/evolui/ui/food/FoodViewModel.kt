@@ -65,6 +65,14 @@ class FoodViewModel(private val container: AppContainer) : ViewModel() {
     val savedMeals: StateFlow<List<SavedMeal>> = foods.savedMeals()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Refeição do horário atual, para as sugestões rápidas. */
+    val quickType = MutableStateFlow(defaultMealType())
+
+    /** O que a pessoa mais registra nesta refeição. */
+    val frequentFoods: StateFlow<List<FoodEntity>> = quickType
+        .flatMapLatest { foods.frequent(it, 8) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /** O que já foi registrado no dia selecionado (para "Salvar refeição de hoje"). */
     val dayMeals: StateFlow<List<MealEntity>> = date
         .flatMapLatest { repo.meals(it) }
@@ -103,4 +111,11 @@ class FoodViewModel(private val container: AppContainer) : ViewModel() {
     fun deleteSavedMeal(id: Long) = viewModelScope.launch { foods.deleteSavedMeal(id) }
 
     fun logSavedMeal(meal: SavedMeal, type: MealType) = viewModelScope.launch { foods.logSavedMeal(meal, date.value, type) }
+
+    /** Salva a refeição e já registra os itens no dia selecionado, na refeição de costume. */
+    fun saveAndLogMeal(draft: SavedMealDraft) = viewModelScope.launch {
+        val entity = SavedMealEntity(id = draft.id, name = draft.name.trim(), mealType = draft.type.name, createdMillis = draft.createdMillis)
+        val id = foods.saveMeal(entity, draft.items)
+        foods.logSavedMeal(SavedMeal(entity.copy(id = id), draft.items), date.value, draft.type)
+    }
 }

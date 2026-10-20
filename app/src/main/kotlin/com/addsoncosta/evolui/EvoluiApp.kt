@@ -1,6 +1,7 @@
 package com.addsoncosta.evolui
 
 import android.app.Application
+import com.addsoncosta.evolui.backup.BackupManager
 import com.addsoncosta.evolui.data.AppDatabase
 import com.addsoncosta.evolui.data.AppSettings
 import com.addsoncosta.evolui.data.Repository
@@ -22,6 +23,7 @@ class EvoluiApp : Application() {
         container = AppContainer(this)
         Evolui.palette = Palettes.byKey(container.settings.theme.value)
         container.scope.launch { container.repository.seedIfNeeded() }
+        runCatching { container.backup.ensureScheduled() }
     }
 }
 
@@ -32,6 +34,8 @@ class AppContainer(app: Application) {
     val settings = AppSettings(app)
     val repository = Repository(app, database)
     val health = HealthSync(app)
+    /** Backup automático no Google Drive (pelo seletor de arquivos) e envio por e-mail. */
+    val backup = BackupManager(app, repository)
 
     /** Dia selecionado na tela Hoje; alimentos e exercícios são registrados nele. */
     val selectedDate = MutableStateFlow(LocalDate.now())

@@ -88,6 +88,7 @@ dependencies {
     implementation(libs.mlkit.text.recognition)
     implementation(libs.mlkit.image.labeling)
     implementation(libs.profileinstaller)
+    implementation(libs.work.runtime.ktx)
 
     testImplementation(libs.junit)
 }
