@@ -33,6 +33,9 @@ import androidx.compose.ui.unit.dp
 import com.addsoncosta.evolui.data.HealthType
 import com.addsoncosta.evolui.data.LabResultEntity
 import com.addsoncosta.evolui.health.Attachments
+import com.addsoncosta.evolui.health.AutoFill
+import com.addsoncosta.evolui.health.DocumentAutoFill
+import com.addsoncosta.evolui.health.HealthFields
 import com.addsoncosta.evolui.health.BioParser
 import com.addsoncosta.evolui.health.ExamParser
 import com.addsoncosta.evolui.health.EyeParser
@@ -73,34 +76,59 @@ data class ImportedData(
     val eye: EyeExam? = null,
     /** Resumo do laudo de imagem ou procedimento (Exames). */
     val report: ReportSummary? = null,
+    /** Campos essenciais do formulário achados no texto (e a receita, se houver). */
+    val fill: AutoFill? = null,
 )
 
 /** Separa, do texto lido do arquivo, o que interessa para cada tipo de registro. */
-fun interpret(type: HealthType, text: String, usedPlaces: List<String>, reportMode: Boolean): ImportedData = when (type) {
-    HealthType.OFTALMOLOGIA -> {
-        val eye = EyeParser.parse(text)
-        val base = ExamParser.parse(text, emptyList(), usedPlaces)
-        ImportedData(exam = ParsedExam(eye.date ?: base.date, null, emptyList()), eye = eye)
-    }
-    HealthType.BIOIMPEDANCIA -> {
-        // Só o essencial (peso, gordura, músculo, água, visceral, TMB, idade metabólica, IMC).
-        val values = BioParser.parse(text).mapNotNull { v -> LabCatalog.find(v.name)?.let { FoundValue(it, v.value, v.line) } }
-        val base = ExamParser.parse(text, emptyList(), usedPlaces)
-        ImportedData(exam = ParsedExam(base.date, null, values))
-    }
-    HealthType.EXAME -> {
-        val parsed = ExamParser.parse(text, LabCatalog.labItems, usedPlaces)
-        val complex = reportMode || (parsed.values.size < 3 && ReportSummaryParser.isComplexReport(text))
-        if (complex) {
-            val r = ReportSummaryParser.parse(text)
-            val report = r.copy(date = parsed.date ?: r.date, place = parsed.lab ?: r.place)
-            // Laudo de imagem: não sugere valores soltos que a leitura possa ter achado no meio do texto.
-            ImportedData(exam = ParsedExam(report.date, report.place, emptyList()), report = report)
-        } else {
-            ImportedData(exam = parsed)
+fun interpret(type: HealthType, text: String, usedPlaces: List<String>, reportMode: Boolean): ImportedData {
+    val general = DocumentAutoFill.read(type, text, usedPlaces)
+    return when (type) {
+        HealthType.OFTALMOLOGIA -> {
+            val eye = EyeParser.parse(text)
+            val base = ExamParser.parse(text, emptyList(), usedPlaces)
+            val date = eye.date ?: base.date
+            ImportedData(exam = ParsedExam(date, null, emptyList()), eye = eye, fill = AutoFill(date = date).orElse(general))
+        }
+        HealthType.BIOIMPEDANCIA -> {
+            // Só o essencial (peso, gordura, músculo, água, visceral, TMB, idade metabólica, IMC).
+            val values = BioParser.parse(text).mapNotNull { v -> LabCatalog.find(v.name)?.let { FoundValue(it, v.value, v.line) } }
+            val base = ExamParser.parse(text, emptyList(), usedPlaces)
+            ImportedData(exam = ParsedExam(base.date, null, values), fill = AutoFill(date = base.date).orElse(general))
+        }
+        HealthType.EXAME -> {
+            val parsed = ExamParser.parse(text, LabCatalog.labItems, usedPlaces)
+            val complex = reportMode || (parsed.values.size < 3 && ReportSummaryParser.isComplexReport(text))
+            if (complex) {
+                val r = ReportSummaryParser.parse(text)
+                val report = r.copy(date = parsed.date ?: r.date, place = parsed.lab ?: r.place)
+                val fill = AutoFill(
+                    date = report.date,
+                    title = report.examName,
+                    professional = report.requestingDoctor,
+                    place = report.place,
+                    extras = listOfNotNull(
+                        report.conclusion?.let { HealthFields.REPORT_CONCLUSION to it },
+                        report.reportingDoctor?.let { HealthFields.REPORT_DOCTOR to it },
+                    ).toMap(),
+                )
+                // Laudo de imagem: não sugere valores soltos que a leitura possa ter achado no meio do texto.
+                ImportedData(exam = ParsedExam(report.date, report.place, emptyList()), report = report, fill = fill)
+            } else {
+                val title = if (parsed.values.any { it.item.name in LabCatalog.hemogramNames }) "Hemograma e exames de sangue"
+                else if (parsed.values.size >= 3) "Exames de sangue" else null
+                val requesting = ReportSummaryParser.parse(text).requestingDoctor
+                ImportedData(
+                    exam = parsed,
+                    fill = AutoFill(date = parsed.date, title = title, place = parsed.lab, professional = requesting).orElse(general.copy(extras = emptyMap(), prescription = null)),
+                )
+            }
+        }
+        else -> {
+            val base = ExamParser.parse(text, emptyList(), usedPlaces)
+            ImportedData(exam = base, fill = general.copy(date = general.date ?: base.date))
         }
     }
-    else -> ImportedData(exam = ExamParser.parse(text, emptyList(), usedPlaces))
 }
 
 @Composable

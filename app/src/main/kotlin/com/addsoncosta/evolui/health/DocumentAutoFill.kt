@@ -94,7 +94,7 @@ object DocumentAutoFill {
                 AutoFill(
                     title = rx.specialty?.let { "Consulta de ${it.lowercase()}" },
                     extras = extras,
-                    prescription = rx.takeIf { it.medicines.isNotEmpty() },
+                    prescription = rx.takeIf { it.medicines.isNotEmpty() && it.looksLikePrescription },
                 )
             }
             HealthType.MEDICACAO -> {
@@ -103,7 +103,7 @@ object DocumentAutoFill {
                     title = m?.name,
                     professional = rx.doctorWithCrm,
                     extras = m?.let { medicineExtras(it, rx.date) }.orEmpty(),
-                    prescription = rx.takeIf { it.medicines.isNotEmpty() },
+                    prescription = rx.takeIf { it.medicines.isNotEmpty() && it.looksLikePrescription },
                 )
             }
             HealthType.SUPLEMENTACAO -> supplement(raw, folded, rx)

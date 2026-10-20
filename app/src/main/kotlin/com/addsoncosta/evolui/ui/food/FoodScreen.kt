@@ -74,6 +74,7 @@ fun FoodScreen() {
     var editor by remember { mutableStateOf<SavedMealDraft?>(null) }
     var picking by remember { mutableStateOf(false) }
     var photo by remember { mutableStateOf(false) }
+    val selectedDate by vm.date.collectAsStateWithLifecycle()
     val draft = editor
 
     when {
@@ -114,7 +115,7 @@ fun FoodScreen() {
                 editor = null
                 Toast.makeText(context, loggedMessage(draft.type, draft.items.sumOf { it.kcal }), Toast.LENGTH_LONG).show()
             },
-            dayLabel = dayLabel(vm.date.collectAsStateWithLifecycle().value),
+            dayLabel = dayLabel(selectedDate),
             onDelete = {
                 vm.deleteSavedMeal(draft.id)
                 editor = null

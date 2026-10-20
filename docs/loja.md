@@ -28,7 +28,8 @@ ACOMPANHAMENTO
 • Histórico dia a dia.
 
 PRIVACIDADE
-• Sem cadastro, sem anúncios e sem internet: seus dados ficam só no seu celular.
+• Sem cadastro e sem anúncios: seus dados ficam só no seu celular.
+• Minha IA (opcional): conecte o Claude, ChatGPT, Gemini, Grok ou outra IA com a sua chave para reconhecer pratos brasileiros pela foto. A foto só sai do celular quando você toca para analisar, e vai direto para a IA escolhida.
 • Backup e restauração em arquivo.
 
 O Evolui não substitui orientação médica ou de nutricionista.
@@ -37,8 +38,12 @@ O Evolui não substitui orientação médica ou de nutricionista.
 **Classificação de conteúdo:** Livre (sem conteúdo sensível)
 
 **Segurança dos dados** (formulário da Play Console):
-- O app coleta ou compartilha dados? **Não.** Os dados ficam só no aparelho e nunca são transmitidos, então para o Google eles não contam como "coletados".
-- Criptografia em trânsito: não se aplica (o app não usa rede).
+- O app coleta dados? **Não.** O Evolui não tem servidor: os registros ficam só no aparelho e nunca são enviados para o desenvolvedor.
+- O app compartilha dados? **Sim, só a pedido do usuário (Minha IA, opcional).** Quando o usuário conecta a própria IA (Anthropic, OpenAI, Google, xAI, OpenRouter ou serviço compatível) com a chave dele e toca em "Analisar com minha IA", o app envia direto para esse provedor:
+  - **Fotos e vídeos > Fotos**: foto do prato (finalidade: funcionalidade do app; opcional; enviada só a cada toque do usuário).
+  - **Saúde e fitness > Informações de saúde**: foto/texto de documento de saúde (receita, exame, laudo), quando o usuário escolher ler um documento com a IA (finalidade: funcionalidade do app; opcional).
+  - Não há publicidade, análise nem venda de dados. Nada é enviado se o usuário não conectar uma IA.
+- Criptografia em trânsito: **sim** (HTTPS até o provedor de IA escolhido; é a única comunicação de rede do app).
 - O usuário pode pedir exclusão: sim, desinstalando ou limpando os dados do app.
 
 **Recursos gráficos que você precisa enviar:**

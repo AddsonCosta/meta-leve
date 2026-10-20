@@ -197,7 +197,7 @@ private fun HealthHub(onOpen: (String) -> Unit, onOpenProgress: () -> Unit, onOp
             if (conditions.isEmpty()) "Doenças e histórico de saúde" else "${conditions.size} ${if (conditions.size == 1) "condição" else "condições"}",
             "anamnesis"))
         add(HubCard("Pressão arterial", Icons.Filled.Favorite, pressureHubColor(lastPressure) ?: Evolui.Red, pressureHubSubtitle(lastPressure), "pressure"))
-        listOf(HealthType.CONSULTA, HealthType.EXAME, HealthType.BIOIMPEDANCIA, HealthType.MEDICACAO, HealthType.ODONTOLOGIA, HealthType.OFTALMOLOGIA,
+        listOf(HealthType.CONSULTA, HealthType.EXAME, HealthType.BIOIMPEDANCIA, HealthType.MEDICACAO, HealthType.SUPLEMENTACAO, HealthType.ODONTOLOGIA, HealthType.OFTALMOLOGIA,
             HealthType.NUTRICAO, HealthType.FISIOTERAPIA, HealthType.TERAPIA, HealthType.TRATAMENTO).forEach { t ->
             add(HubCard(t.label, t.icon(), Color.Unspecified, summary(t), "list:${t.name}"))
         }

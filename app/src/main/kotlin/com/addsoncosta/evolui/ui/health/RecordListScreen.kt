@@ -173,7 +173,8 @@ fun RecordListScreen(
 private fun emptyHelp(type: HealthType): String = when (type) {
     HealthType.CONSULTA -> "Guarde cada consulta: médico, especialidade, o que foi dito e o retorno. Você pode anexar a receita ou o pedido em foto ou PDF."
     HealthType.EXAME -> "Cadastre seus exames com o laboratório e os valores. Tire uma foto do laudo ou escolha o PDF: o app tenta ler os valores sozinho para você conferir."
-    HealthType.MEDICACAO -> "Anote os remédios que toma ou já tomou: dose, horários, início e fim."
+    HealthType.MEDICACAO -> "Anote os remédios que toma ou já tomou: dose, horários, início e fim. Anexe a foto da receita: o app lê os remédios e oferece lembretes."
+    HealthType.SUPLEMENTACAO -> "Cadastre cada suplemento: nome, marca, dose e horário. Pode tirar foto do rótulo. Na próxima vez é só escolher da lista, e dá para receber lembretes para tomar."
     HealthType.ODONTOLOGIA -> "Registre limpezas, restaurações e tratamentos. Use a arcada dentária para descrever cada dente."
     HealthType.OFTALMOLOGIA -> "Guarde cada consulta com o oftalmologista: o grau de cada olho, a acuidade, a pressão do olho e os diagnósticos. Tire uma foto da receita de óculos ou escolha o PDF: o app tenta ler os valores para você conferir."
     HealthType.BIOIMPEDANCIA -> "Registre os resultados da bioimpedância (peso, % de gordura, massa muscular...) para comparar ao longo do tempo."
@@ -191,6 +192,7 @@ private fun RecordRow(r: HealthRecordEntity, type: HealthType, files: Int, onCli
                 Text(r.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 val line = when (type) {
                     HealthType.MEDICACAO -> listOfNotNull(extra["dose"], extra["frequencia"])
+                    HealthType.SUPLEMENTACAO -> listOfNotNull(extra["marca"], extra["dose"], extra["horario"])
                     HealthType.CONSULTA -> listOfNotNull(r.professional, extra["especialidade"])
                     HealthType.EXAME -> listOfNotNull(r.place?.let { if (HealthFields.isReportExam(extra)) it else "Lab.: $it" })
                     HealthType.OFTALMOLOGIA -> listOfNotNull(
