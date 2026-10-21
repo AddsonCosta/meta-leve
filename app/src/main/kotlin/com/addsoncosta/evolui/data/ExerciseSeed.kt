@@ -16,8 +16,12 @@ import kotlinx.serialization.json.Json
  * usam o valor da atividade mais parecida.
  */
 object ExerciseSeed {
-    /** Suba este número sempre que mudar a lista de exercícios. */
-    private const val VERSION = 2
+    /**
+     * Suba este número sempre que mudar a lista de exercícios.
+     * 3: atividades do dia a dia (casa, quintal e jardim, compras e cuidados, reparos e trabalho);
+     * a antiga categoria "Casa e trabalho" foi dividida entre elas.
+     */
+    private const val VERSION = 3
     private const val KEY = "versao_exercicios"
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -30,7 +34,9 @@ object ExerciseSeed {
             val catalog = json.decodeFromString(catalogSerializer, text)
             val dao = db.exerciseDao()
             val existing = dao.names().map { Repository.normalize(it) }.toSet()
+            // Compara sem acento e sem maiúsculas, e ignora repetidos no próprio arquivo: nunca duplica.
             val fresh = catalog.filter { Repository.normalize(it.name) !in existing }
+                .distinctBy { Repository.normalize(it.name) }
                 .map { ExerciseEntity(category = it.category, name = it.name, met = it.met) }
             if (fresh.isNotEmpty()) dao.insertAll(fresh)
             // Os exercícios antigos passam para as categorias novas (favoritos continuam).

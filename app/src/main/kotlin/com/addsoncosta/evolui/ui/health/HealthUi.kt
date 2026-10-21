@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Healing
+import androidx.compose.material.icons.filled.LocalPharmacy
 import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.MonitorWeight
@@ -33,6 +34,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.TextFieldColors
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -83,6 +86,7 @@ fun HealthType.color(): Color = when (this) {
     HealthType.BIOIMPEDANCIA -> Evolui.Neon
     HealthType.ANAMNESE -> Evolui.Cyan
     HealthType.OFTALMOLOGIA -> Evolui.Cyan
+    HealthType.SUPLEMENTACAO -> Evolui.Neon
 }
 
 fun HealthType.icon(): ImageVector = when (this) {
@@ -97,6 +101,7 @@ fun HealthType.icon(): ImageVector = when (this) {
     HealthType.BIOIMPEDANCIA -> Icons.Filled.MonitorWeight
     HealthType.ANAMNESE -> Icons.Filled.ContentPaste
     HealthType.OFTALMOLOGIA -> Icons.Filled.Visibility
+    HealthType.SUPLEMENTACAO -> Icons.Filled.LocalPharmacy
 }
 
 val CalendarIcon: ImageVector get() = Icons.Filled.CalendarMonth
@@ -140,14 +145,18 @@ fun HelpField(
     multiline: Boolean = false,
     error: String? = null,
     number: Boolean = false,
+    highlight: Boolean = false,
 ) {
-    val below = error ?: help
+    // Campo que a leitura do documento não conseguiu preencher: leve destaque e "Preencher".
+    val mark = highlight && error == null && value.isBlank()
+    val below = error ?: if (mark) fillHint(help) else help
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
         label = { Text(label) },
         supportingText = if (below != null) { { Text(below) } } else null,
         isError = error != null,
+        colors = if (mark) fillColors() else OutlinedTextFieldDefaults.colors(),
         singleLine = !multiline,
         minLines = if (multiline) 3 else 1,
         keyboardOptions = KeyboardOptions(
@@ -155,6 +164,23 @@ fun HelpField(
             keyboardType = if (number) KeyboardType.Number else KeyboardType.Text,
         ),
         modifier = modifier.fillMaxWidth(),
+    )
+}
+
+/** Legenda de campo a preencher (a leitura do documento não achou o valor). */
+fun fillHint(help: String?): String = if (help.isNullOrBlank()) "Preencher" else "Preencher · $help"
+
+/** Cores do destaque leve dos campos que faltam preencher (cor de destaque do tema). */
+@Composable
+fun fillColors(): TextFieldColors {
+    val c = MaterialTheme.colorScheme.tertiary
+    return OutlinedTextFieldDefaults.colors(
+        unfocusedContainerColor = c.copy(alpha = 0.10f),
+        focusedContainerColor = c.copy(alpha = 0.06f),
+        unfocusedBorderColor = c.copy(alpha = 0.85f),
+        unfocusedLabelColor = c,
+        unfocusedSupportingTextColor = c,
+        focusedSupportingTextColor = c,
     )
 }
 
@@ -168,8 +194,10 @@ fun DateField(
     help: String?,
     modifier: Modifier = Modifier,
     clearable: Boolean = false,
+    highlight: Boolean = false,
 ) {
     var open by remember { mutableStateOf(false) }
+    val below = if (highlight) fillHint(help) else help
     Box(modifier.fillMaxWidth()) {
         OutlinedTextField(
             value = epochDay?.let { dayText(it) } ?: "",
@@ -177,7 +205,8 @@ fun DateField(
             readOnly = true,
             label = { Text(label) },
             placeholder = { Text("Toque para escolher") },
-            supportingText = if (help != null) { { Text(help) } } else null,
+            supportingText = if (below != null) { { Text(below) } } else null,
+            colors = if (highlight) fillColors() else OutlinedTextFieldDefaults.colors(),
             trailingIcon = {
                 if (clearable && epochDay != null) {
                     IconButton(onClick = { onChange(null) }) { Icon(Icons.Filled.Clear, "Limpar data") }

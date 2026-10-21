@@ -3,10 +3,14 @@ package com.addsoncosta.evolui.ui.exercise
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.addsoncosta.evolui.AppContainer
+import com.addsoncosta.evolui.core.ActivityLevel
 import com.addsoncosta.evolui.core.EnergyCalculator
 import com.addsoncosta.evolui.core.Profile
+import com.addsoncosta.evolui.core.RoutineCalc
 import com.addsoncosta.evolui.data.ExerciseEntity
 import com.addsoncosta.evolui.data.Repository
+import com.addsoncosta.evolui.data.RoutineEntryEntity
+import com.addsoncosta.evolui.data.RoutineRepository
 import com.addsoncosta.evolui.data.WorkoutEntity
 import com.addsoncosta.evolui.data.WorkoutRepository
 import java.time.DayOfWeek
@@ -44,6 +48,17 @@ data class PersonInfo(
         }
     }
 
+    /** kcal acima do repouso (MET − 1), para a rotina do dia a dia: o repouso já entra no gasto do dia. */
+    fun netKcal(met: Double, minutes: Double): Double {
+        if (minutes <= 0) return 0.0
+        val resting = restingKcalPerDay
+        return if (resting != null && resting > 0) {
+            RoutineCalc.netKcal(met, minutes, resting)
+        } else {
+            RoutineCalc.netKcalByWeight(met, weightKg, minutes)
+        }
+    }
+
     companion object {
         fun from(profile: Profile?, weightKg: Double, date: LocalDate): PersonInfo {
             if (profile == null) return PersonInfo(weightKg)
@@ -77,7 +92,20 @@ data class WeekSummary(val start: LocalDate, val end: LocalDate, val minutes: Do
 class ExerciseViewModel(private val container: AppContainer) : ViewModel() {
     private val repo = container.repository
     private val workoutRepo = WorkoutRepository(container)
+    private val routineRepo = RoutineRepository(container.database)
     val date = container.selectedDate
+
+    /** Atividades da rotina do dia a dia. */
+    val routine: StateFlow<List<RoutineEntryEntity>> = routineRepo.entries()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Lista completa (sem filtro), para escolher a atividade da rotina. */
+    val allExercises: StateFlow<List<ExerciseEntity>> = repo.exercises()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Nível de atividade padrão do perfil (para avisar sobre contagem dupla com a rotina). */
+    val defaultActivity: StateFlow<ActivityLevel?> = repo.profile.map { it?.defaultActivity }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Texto da busca e categoria escolhida ([FAVORITES] = só favoritos; nulo = todas). */
     val query = MutableStateFlow("")
@@ -154,6 +182,11 @@ class ExerciseViewModel(private val container: AppContainer) : ViewModel() {
         val d = date.value
         workoutRepo.log(d, exercise, minutes, currentPerson(d).kcal(exercise.met, minutes), startTime)
     }
+
+    /** Cria ou altera uma atividade da rotina; as novas passam a contar a partir de hoje. */
+    fun saveRoutine(entry: RoutineEntryEntity) = viewModelScope.launch { routineRepo.save(entry) }
+
+    fun deleteRoutine(entry: RoutineEntryEntity) = viewModelScope.launch { routineRepo.delete(entry) }
 
     fun toggleFavorite(exercise: ExerciseEntity) = viewModelScope.launch { repo.setExerciseFavorite(exercise, !exercise.favorite) }
 

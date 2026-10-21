@@ -9,11 +9,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -25,6 +27,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import java.text.NumberFormat
@@ -59,10 +62,26 @@ fun NumberField(
     decimal: Boolean = true,
     help: String? = null,
     error: String? = null,
+    highlight: Boolean = false,
 ) {
     val invalid = error != null || (value.isNotEmpty() && value.toDecimal() == null)
-    val below = error ?: help
+    // Campo que a leitura automática não conseguiu preencher: leve destaque e "Preencher".
+    val mark = highlight && !invalid && value.isEmpty()
+    val below = error ?: if (mark) (if (help.isNullOrBlank()) "Preencher" else "Preencher · $help") else help
+    val tint = MaterialTheme.colorScheme.tertiary
     OutlinedTextField(
+        colors = if (mark) {
+            OutlinedTextFieldDefaults.colors(
+                unfocusedContainerColor = tint.copy(alpha = 0.10f),
+                focusedContainerColor = tint.copy(alpha = 0.06f),
+                unfocusedBorderColor = tint.copy(alpha = 0.85f),
+                unfocusedLabelColor = tint,
+                unfocusedSupportingTextColor = tint,
+                focusedSupportingTextColor = tint,
+            )
+        } else {
+            OutlinedTextFieldDefaults.colors()
+        },
         value = value,
         onValueChange = { new -> if (new.all { it.isDigit() || (decimal && (it == ',' || it == '.')) }) onValueChange(new) },
         label = { Text(label) },
@@ -143,11 +162,19 @@ fun Stat(value: String, label: String, modifier: Modifier = Modifier, color: Col
     }
 }
 
-/** Linha com rótulo à esquerda e valor à direita. */
+/**
+ * Linha com rótulo à esquerda e valor à direita. O rótulo usa a largura natural (com limite),
+ * e o valor ocupa o resto, quebrando linha alinhado à direita. Assim um valor longo nunca
+ * espreme o rótulo em uma letra por linha.
+ */
 @Composable
-fun KeyValue(key: String, value: String) {
-    Row(Modifier.fillMaxWidth()) {
-        Text(key, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, fontWeight = FontWeight.Bold)
+fun KeyValue(key: String, value: String, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Text(
+            key,
+            Modifier.widthIn(max = 160.dp).padding(end = 12.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(value, Modifier.weight(1f), fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
     }
 }

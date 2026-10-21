@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -144,10 +146,15 @@ fun TodayScreen(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     Stat(s.summary.intakeGoal.fmt(), "Meta", color = Evolui.Neon)
                     Stat(s.summary.eaten.fmt(), "Comido")
-                    Stat(s.summary.exercise.fmt(), "Treino", color = Evolui.Orange)
+                    Stat(s.workoutKcal.fmt(), "Treino", color = Evolui.Orange)
+                    if (s.routineKcal > 0) Stat(s.routineKcal.fmt(), "Rotina", color = Evolui.Orange)
                 }
                 Text(
-                    "A meta já soma as calorias dos treinos: quanto mais você se mexe, mais pode comer.",
+                    if (s.routineKcal > 0) {
+                        "A meta já soma as calorias dos treinos e da rotina (${s.summary.exercise.fmt()} kcal): quanto mais você se mexe, mais pode comer."
+                    } else {
+                        "A meta já soma as calorias dos treinos: quanto mais você se mexe, mais pode comer."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -247,10 +254,65 @@ fun TodayScreen(
         // Exercícios.
         item {
             Panel {
-                SectionHeader("Exercícios", "${s.summary.exercise.fmt()} kcal", onAddExercise)
+                SectionHeader("Exercícios", "${s.workoutKcal.fmt()} kcal", onAddExercise)
                 if (s.workouts.isEmpty()) Text("Nenhum exercício hoje.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 s.workouts.forEach { w ->
                     EntryRow(w.name, "${w.minutes.fmt()} min" + if (w.externalId != null) " · " + sourceLabel(w.source) else "", w.kcal, Evolui.Orange) { vm.deleteWorkout(w) }
+                }
+            }
+        }
+
+        // Rotina do dia a dia (montada em Treino › Minha rotina).
+        if (s.hasRoutine) {
+            item(key = "rotina") {
+                Panel {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Minha rotina", style = MaterialTheme.typography.titleMedium)
+                            Text("${s.routineKcal.fmt()} kcal acima do repouso", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    if (s.routine.isEmpty()) {
+                        Text("Nenhuma atividade da rotina neste dia da semana.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    s.routine.forEach { item ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .toggleable(value = !item.skipped, role = Role.Checkbox, onValueChange = { on -> vm.setRoutineSkipped(item.entry, !on) }),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(checked = !item.skipped, onCheckedChange = null)
+                            Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                                Text(item.entry.name, maxLines = 2, color = if (item.skipped) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
+                                Text(
+                                    "${item.entry.minutes.fmt()} min" + if (item.skipped) " · desmarcada hoje" else "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Text(
+                                "${item.kcal.fmt()} kcal",
+                                fontWeight = FontWeight.Bold,
+                                color = if (item.skipped) MaterialTheme.colorScheme.onSurfaceVariant else Evolui.Orange,
+                            )
+                        }
+                    }
+                    Text(
+                        "Desmarque o que não fez neste dia. Para mudar a rotina, vá em Treino › Minha rotina.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (s.activity != ActivityLevel.SEDENTARY) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                        Text(
+                            "Dica: com a rotina registrada, o nível de atividade \"${s.activity.label}\" pode contar o mesmo movimento duas vezes. " +
+                                "Para um gasto mais certo, use \"Sedentário\" (dá para mudar o padrão em Perfil).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        TextButton(onClick = { vm.setActivity(ActivityLevel.SEDENTARY) }) { Text("Usar sedentário neste dia") }
+                    }
                 }
             }
         }

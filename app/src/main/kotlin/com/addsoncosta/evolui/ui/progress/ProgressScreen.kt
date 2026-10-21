@@ -97,14 +97,13 @@ import com.addsoncosta.evolui.ui.share.rememberPhoto
 import com.addsoncosta.evolui.ui.theme.Evolui
 import java.io.File
 import java.time.LocalDate
-import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 
 /** Proporção das janelas de antes e depois (largura / altura). */
 private const val WINDOW_ASPECT = 0.75f
 
-private enum class Slot(val title: String) { BEFORE("Antes"), AFTER("Depois") }
+private enum class Slot(val title: String, val key: String) { BEFORE("Antes", "antes"), AFTER("Depois", "depois") }
 
 /** O que fazer com a foto escolhida na galeria. */
 private sealed interface PickTarget {
@@ -139,6 +138,10 @@ fun ProgressScreen(onBack: () -> Unit) {
     var editing by remember { mutableStateOf<PhotoEntity?>(null) }
     var framingPhoto by remember { mutableStateOf<PhotoEntity?>(null) }
     var pickTarget by remember { mutableStateOf<PickTarget>(PickTarget.AddNew) }
+    // Data, peso e texto de cada lado (automáticos até o usuário mudar).
+    val labelStore = remember { SlotLabelStore(context) }
+    var labels by remember { mutableStateOf(Slot.entries.associateWith { labelStore.read(it.key) }) }
+    var editingLabel by remember { mutableStateOf<Slot?>(null) }
 
     val s = state
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -171,12 +174,19 @@ fun ProgressScreen(onBack: () -> Unit) {
     val after = photos.firstOrNull { it.id == pair.second && it.id != before?.id }
         ?: photos.lastOrNull()?.takeIf { it.id != before?.id }
 
+    val today = LocalDate.now()
+    fun autoDate(slot: Slot): LocalDate = if (slot == Slot.BEFORE) s.profile.startDate else today
+    fun autoWeight(slot: Slot): Double = if (slot == Slot.BEFORE) s.profile.startWeightKg else s.currentWeight
+    fun resolved(slot: Slot): ResolvedLabel = (labels[slot] ?: SlotLabel()).resolve(autoDate(slot), autoWeight(slot))
+    val beforeLabel = resolved(Slot.BEFORE)
+    val afterLabel = resolved(Slot.AFTER)
+
     fun onAction(slot: Slot, photo: PhotoEntity?, action: WindowAction) {
         when (action) {
             WindowAction.SWAP -> choosing = slot
             WindowAction.REPLACE -> pick(if (photo != null) PickTarget.Replace(photo) else PickTarget.Fill(slot))
             WindowAction.FRAME -> framingPhoto = photo
-            WindowAction.EDIT -> editing = photo
+            WindowAction.EDIT -> editingLabel = slot
             WindowAction.DELETE -> deleting = photo
         }
     }
@@ -240,31 +250,31 @@ fun ProgressScreen(onBack: () -> Unit) {
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CompareWindow(Slot.BEFORE, before, photoRepo, hasPhotos = photos.isNotEmpty(), Modifier.weight(1f)) { a -> onAction(Slot.BEFORE, before, a) }
-                    CompareWindow(Slot.AFTER, after, photoRepo, hasPhotos = photos.isNotEmpty(), Modifier.weight(1f)) { a -> onAction(Slot.AFTER, after, a) }
+                    CompareWindow(Slot.BEFORE, before, beforeLabel.text, photoRepo, hasPhotos = photos.isNotEmpty(), Modifier.weight(1f)) { a -> onAction(Slot.BEFORE, before, a) }
+                    CompareWindow(Slot.AFTER, after, afterLabel.text, photoRepo, hasPhotos = photos.isNotEmpty(), Modifier.weight(1f)) { a -> onAction(Slot.AFTER, after, a) }
                 }
                 Text(
-                    "Toque numa janela para trocar, substituir, ajustar o enquadramento, editar o texto ou apagar.",
+                    "Já vem com a data de início e a de hoje, e o peso de cada uma. Toque numa janela para trocar a foto, enquadrar, girar ou mudar o texto.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (before != null && after != null) {
-                    Text(differenceText(before, after), fontWeight = FontWeight.Bold, color = Evolui.Neon)
+                    Text(differenceText(beforeLabel, afterLabel), fontWeight = FontWeight.Bold, color = Evolui.Neon)
                     Button(onClick = {
                         scope.launch {
-                            val list = listOf(Slot.BEFORE to before, Slot.AFTER to after).mapNotNull { (slot, ph) ->
+                            val list = listOf(Triple(Slot.BEFORE, before, beforeLabel), Triple(Slot.AFTER, after, afterLabel)).mapNotNull { (slot, ph, label) ->
                                 PhotoCache.load(context, photoRepo.file(ph), 1600)?.let {
-                                    CaptionedPhoto(it, captionOf(ph), ph.framing(), slot.title.uppercase(), ph.id)
+                                    CaptionedPhoto(it, label.text, ph.framing(), slot.title.uppercase(), ph.id)
                                 }
                             }
                             if (list.size == 2) {
-                                val days = daysBetween(before, after)
+                                val days = abs(afterLabel.date.toEpochDay() - beforeLabel.date.toEpochDay())
                                 comparePeriod = when {
                                     days <= 7 -> SharePeriod.Week
                                     days <= 30 -> SharePeriod.Month
                                     else -> SharePeriod.Months(((days + 29) / 30).toInt().coerceIn(1, 24))
                                 }
-                                compareText = pairText(before, after)
+                                compareText = pairText(beforeLabel, afterLabel)
                                 shareCompare = list
                             } else {
                                 Toast.makeText(context, "Não foi possível abrir as fotos", Toast.LENGTH_SHORT).show()
@@ -402,6 +412,23 @@ fun ProgressScreen(onBack: () -> Unit) {
         )
     }
 
+    editingLabel?.let { slot ->
+        SlotLabelDialog(
+            title = "Texto do ${slot.title.lowercase()}",
+            label = labels[slot] ?: SlotLabel(),
+            autoDate = autoDate(slot),
+            autoWeight = autoWeight(slot),
+            autoName = if (slot == Slot.BEFORE) "Início" else "Hoje",
+            photo = if (slot == Slot.BEFORE) before else after,
+            onDismiss = { editingLabel = null },
+            onSave = { label ->
+                labelStore.save(slot.key, label)
+                labels = labels + (slot to label)
+                editingLabel = null
+            },
+        )
+    }
+
     editing?.let { ph ->
         EditPhotoDialog(
             photo = ph,
@@ -421,11 +448,22 @@ fun ProgressScreen(onBack: () -> Unit) {
                 bitmap = bmp,
                 aspect = WINDOW_ASPECT,
                 initial = ph.framing(),
-                title = "Ajustar enquadramento",
+                title = "Enquadrar e girar",
                 onDismiss = { framingPhoto = null },
                 onSave = { f ->
                     framingPhoto = null
                     scope.launch { photoRepo.saveFraming(ph.id, f.scale.toDouble(), f.offsetX.toDouble(), f.offsetY.toDouble()) }
+                },
+                onSaveRotated = { f, degrees ->
+                    framingPhoto = null
+                    scope.launch {
+                        if (degrees == 0) {
+                            photoRepo.saveFraming(ph.id, f.scale.toDouble(), f.offsetX.toDouble(), f.offsetY.toDouble())
+                        } else {
+                            runCatching { rotatePhoto(context, photoRepo, ph, degrees, f.scale.toDouble(), f.offsetX.toDouble(), f.offsetY.toDouble()) }
+                                .onFailure { Toast.makeText(context, "Não foi possível girar a foto", Toast.LENGTH_SHORT).show() }
+                        }
+                    }
                 },
             )
         }
@@ -437,6 +475,7 @@ fun ProgressScreen(onBack: () -> Unit) {
 private fun CompareWindow(
     slot: Slot,
     photo: PhotoEntity?,
+    caption: String,
     photoRepo: PhotoRepository,
     hasPhotos: Boolean,
     modifier: Modifier,
@@ -493,20 +532,20 @@ private fun CompareWindow(
                     )
                 }
                 DropdownMenuItem(
+                    text = { Text("Editar data, peso e texto") },
+                    leadingIcon = { Icon(Icons.Filled.Edit, null) },
+                    onClick = { pick(WindowAction.EDIT) },
+                )
+                DropdownMenuItem(
                     text = { Text(if (photo != null) "Substituir pela galeria" else "Pegar da galeria") },
                     leadingIcon = { Icon(Icons.Filled.PhotoLibrary, null) },
                     onClick = { pick(WindowAction.REPLACE) },
                 )
                 if (photo != null) {
                     DropdownMenuItem(
-                        text = { Text("Ajustar enquadramento") },
+                        text = { Text("Enquadrar, girar e aproximar") },
                         leadingIcon = { Icon(Icons.Filled.Crop, null) },
                         onClick = { pick(WindowAction.FRAME) },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Editar texto, data e peso") },
-                        leadingIcon = { Icon(Icons.Filled.Edit, null) },
-                        onClick = { pick(WindowAction.EDIT) },
                     )
                     DropdownMenuItem(
                         text = { Text("Apagar foto") },
@@ -516,13 +555,12 @@ private fun CompareWindow(
                 }
             }
         }
-        if (photo != null) {
-            Text(
-                captionOf(photo),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.clickable { onAction(WindowAction.EDIT) }.padding(start = 4.dp),
-            )
+        Row(
+            Modifier.fillMaxWidth().clickable { onAction(WindowAction.EDIT) }.padding(start = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(caption, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Icon(Icons.Filled.Edit, "Editar data, peso e texto", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -539,20 +577,11 @@ private fun Thumb(file: File, modifier: Modifier, maxSide: Int = 300) {
 
 private fun signedKg(kg: Double): String = (if (kg > 0.04) "+" else if (kg < -0.04) "−" else "") + abs(kg).fmt(1)
 
-private fun daysBetween(before: PhotoEntity, after: PhotoEntity): Long =
-    abs(ChronoUnit.DAYS.between(LocalDate.ofEpochDay(before.epochDay), LocalDate.ofEpochDay(after.epochDay)))
-
-private fun differenceText(before: PhotoEntity, after: PhotoEntity): String {
-    val days = daysBetween(before, after)
-    val diff = if (before.weightKg != null && after.weightKg != null) after.weightKg - before.weightKg else null
-    return "$days ${if (days == 1L) "dia" else "dias"} de diferença" + (diff?.let { " · ${signedKg(it)} kg" } ?: "")
-}
-
 /** Texto do par para compartilhar. */
-private fun pairText(before: PhotoEntity, after: PhotoEntity): String = buildString {
+private fun pairText(before: ResolvedLabel, after: ResolvedLabel): String = buildString {
     appendLine("📸 Meu antes e depois no Evolui")
-    appendLine("Antes: ${captionOf(before)}")
-    appendLine("Depois: ${captionOf(after)}")
+    appendLine("Antes: ${before.text}")
+    appendLine("Depois: ${after.text}")
     append("⏳ ${differenceText(before, after)}")
 }
 

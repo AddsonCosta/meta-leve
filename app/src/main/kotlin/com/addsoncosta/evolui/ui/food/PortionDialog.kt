@@ -156,11 +156,14 @@ internal fun PortionDialog(
                             label = { Text(m.name) },
                         )
                     }
-                    AssistChip(
-                        onClick = { addingMeasure = true },
-                        label = { Text("Minha medida") },
-                        leadingIcon = { Icon(Icons.Filled.Add, null, Modifier.size(18.dp)) },
-                    )
+                    // Alimento estimado pela IA (id negativo) não está no banco: não dá para guardar medida nele.
+                    if (food.id > 0) {
+                        AssistChip(
+                            onClick = { addingMeasure = true },
+                            label = { Text("Minha medida") },
+                            leadingIcon = { Icon(Icons.Filled.Add, null, Modifier.size(18.dp)) },
+                        )
+                    }
                 }
                 Text(describe(measure), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (measure.kind == MeasureKind.CUSTOM) {

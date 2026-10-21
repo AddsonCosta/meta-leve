@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Healing
+import androidx.compose.material.icons.filled.LocalPharmacy
 import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.Mood
@@ -100,6 +101,7 @@ internal fun HealthType.icon(): ImageVector = when (this) {
     HealthType.BIOIMPEDANCIA -> Icons.Filled.FitnessCenter
     HealthType.ANAMNESE -> Icons.Filled.Description
     HealthType.OFTALMOLOGIA -> Icons.Filled.Visibility
+    HealthType.SUPLEMENTACAO -> Icons.Filled.LocalPharmacy
 }
 
 /** Cor de cada tipo, derivada do tema atual. */
@@ -115,6 +117,7 @@ internal fun HealthType.color(): Color = when (this) {
     HealthType.BIOIMPEDANCIA -> lerp(Evolui.Neon, Evolui.Orange, 0.5f)
     HealthType.ANAMNESE -> Evolui.TextMuted
     HealthType.OFTALMOLOGIA -> lerp(Evolui.Cyan, Evolui.Neon, 0.5f)
+    HealthType.SUPLEMENTACAO -> lerp(Evolui.Neon, Evolui.Purple, 0.35f)
 }
 
 internal fun minuteText(minute: Int): String = "%02d:%02d".format(minute / 60, minute % 60)

@@ -51,6 +51,7 @@ enum class ReportArea(val label: String) {
     BIOIMPEDANCIA("Bioimpedância"),
     ANAMNESE("Anamnese"),
     OFTALMOLOGIA("Oftalmologia"),
+    SUPLEMENTACAO("Suplementação"),
     CALENDARIO("Calendário de saúde"),
     CICLO("Ciclo menstrual"),
 }
@@ -192,6 +193,7 @@ object HealthReports {
             ReportArea.TERAPIA -> history(d, HealthType.TERAPIA)
             ReportArea.TRATAMENTO -> history(d, HealthType.TRATAMENTO)
             ReportArea.OFTALMOLOGIA -> listOfNotNull(lastEyeVisit(d)) + history(d, HealthType.OFTALMOLOGIA)
+            ReportArea.SUPLEMENTACAO -> listOf(supplementsInUse(d)) + history(d, HealthType.SUPLEMENTACAO)
         }
         return Report(area.label, patientLine(d), sections)
     }
@@ -224,6 +226,7 @@ object HealthReports {
         }
         out += anamnesis(d)
         out += medsInUse(d)
+        if (d.of(HealthType.SUPLEMENTACAO).isNotEmpty()) out += supplementsInUse(d)
 
         val consults = d.of(HealthType.CONSULTA).take(5)
         out += Section("Últimas consultas", if (consults.isEmpty()) listOf(Para("Nenhuma consulta registrada.", muted = true)) else consults.flatMap { r ->
@@ -325,6 +328,16 @@ object HealthReports {
             val e = HealthRepository.decodeExtra(r.extra)
             val dose = listOfNotNull(e["dose"], e["frequencia"]).joinToString(", ")
             Para("• ${r.title}" + (if (dose.isNotBlank()) " — $dose" else "") + (e["motivo"]?.let { " (para $it)" } ?: ""))
+        })
+    }
+
+    private fun supplementsInUse(d: Data): Section {
+        val list = d.of(HealthType.SUPLEMENTACAO).filter { isInUse(it) }.distinctBy { Repository.normalize(it.title) }
+        return Section("Suplementos em uso", if (list.isEmpty()) listOf(Para("Nenhum suplemento em uso registrado.", muted = true)) else list.map { r ->
+            val e = HealthRepository.decodeExtra(r.extra)
+            val more = listOfNotNull(e["marca"], e["dose"], e["horario"]).joinToString(", ")
+            val since = HealthRepository.parseDate(e["inicio"])?.let { " · desde ${it.format(Br)}" } ?: ""
+            Para("• ${r.title}" + (if (more.isNotBlank()) " — $more" else "") + since)
         })
     }
 

@@ -59,9 +59,10 @@ fun UpcomingEventsCard(onOpenHealth: () -> Unit, modifier: Modifier = Modifier) 
     LaunchedEffect(Unit) { withContext(Dispatchers.IO) { Reminders.rescheduleOnce(appContext) } }
 
     val nowMinute = LocalTime.now().let { it.hour * 60 + it.minute }
-    val meds = events.filter { it.type == HealthType.MEDICACAO.name && it.epochDay == today }
+    val takeTypes = setOf(HealthType.MEDICACAO.name, HealthType.SUPLEMENTACAO.name)
+    val meds = events.filter { it.type in takeTypes && it.epochDay == today }
     val upcoming = events.filter { e ->
-        !e.done && e.type != HealthType.MEDICACAO.name &&
+        !e.done && e.type !in takeTypes &&
             (e.epochDay > today || e.minuteOfDay == null || e.minuteOfDay >= nowMinute - 60)
     }.take(3)
     if (meds.isEmpty() && upcoming.isEmpty()) return
@@ -74,7 +75,7 @@ fun UpcomingEventsCard(onOpenHealth: () -> Unit, modifier: Modifier = Modifier) 
         }
         upcoming.forEach { e -> UpcomingRow(e, today) }
         if (meds.isNotEmpty()) {
-            Overline("Remédios de hoje", modifier = Modifier.padding(top = 4.dp))
+            Overline(if (meds.any { it.type == HealthType.SUPLEMENTACAO.name }) "Remédios e suplementos de hoje" else "Remédios de hoje", modifier = Modifier.padding(top = 4.dp))
             meds.forEach { e ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {

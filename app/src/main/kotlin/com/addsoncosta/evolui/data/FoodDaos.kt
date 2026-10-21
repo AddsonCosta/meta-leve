@@ -53,6 +53,15 @@ interface FoodDao {
     )
     fun observeRecent(limit: Int): Flow<List<FoodEntity>>
 
+    /** Alimentos mais registrados num tipo de refeição (sugestões rápidas), dos mais usados para os menos. */
+    @Query(
+        "SELECT food.* FROM food INNER JOIN " +
+            "(SELECT foodId, COUNT(*) AS uses, MAX(id) AS lastId FROM meal " +
+            "WHERE foodId IS NOT NULL AND mealType = :mealType GROUP BY foodId) AS freq " +
+            "ON food.id = freq.foodId ORDER BY freq.uses DESC, freq.lastId DESC LIMIT :limit"
+    )
+    fun observeFrequent(mealType: String, limit: Int): Flow<List<FoodEntity>>
+
     @Query("SELECT * FROM food WHERE tacoId IS NOT NULL")
     suspend fun tacoFoods(): List<FoodEntity>
 

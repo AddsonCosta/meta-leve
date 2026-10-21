@@ -29,8 +29,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ToothStateEntity::class,
         MenstrualCycleEntity::class,
         BloodPressureEntity::class,
+        RoutineEntryEntity::class,
+        RoutineSkipEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -53,10 +55,11 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun toothStateDao(): ToothStateDao
     abstract fun menstrualCycleDao(): MenstrualCycleDao
     abstract fun bloodPressureDao(): BloodPressureDao
+    abstract fun routineDao(): RoutineDao
 
     companion object {
         fun create(context: Context): AppDatabase =
-            Room.databaseBuilder(context, AppDatabase::class.java, "evolui.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
+            Room.databaseBuilder(context, AppDatabase::class.java, "evolui.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
 
         /** Versão 2: jejum, fotos de progresso e treinos importados do Health Connect. */
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -105,6 +108,22 @@ abstract class AppDatabase : RoomDatabase() {
                         "`pulse` INTEGER, `arm` TEXT, `position` TEXT, `notes` TEXT)"
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_blood_pressure_epochMillis` ON `blood_pressure` (`epochMillis`)")
+            }
+        }
+
+        /** Versão 5: rotina do dia a dia (atividades fixas e os dias desmarcados), no mesmo formato que o Room gera. */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `routine_entry` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`exerciseId` INTEGER, `name` TEXT NOT NULL, `met` REAL NOT NULL, `minutes` REAL NOT NULL, " +
+                        "`daysMask` INTEGER NOT NULL, `startEpochDay` INTEGER NOT NULL)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `routine_skip` (`entryId` INTEGER NOT NULL, `epochDay` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`entryId`, `epochDay`))"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_routine_skip_epochDay` ON `routine_skip` (`epochDay`)")
             }
         }
 

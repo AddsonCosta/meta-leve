@@ -175,6 +175,21 @@ object HealthFields {
                 ExtraField("proxima", "Próxima consulta", "Quando voltar ao oftalmologista", FieldKind.DATE),
             ),
         )
+        HealthType.SUPLEMENTACAO -> TypeSpec(
+            titleLabel = "Nome do suplemento", titleHelp = "Ex.: Creatina, whey protein, vitamina D",
+            professionalLabel = "Quem indicou", professionalHelp = "Opcional. Ex.: Juliana Reis (nutricionista)",
+            placeLabel = "Onde comprou", placeHelp = "Opcional. Ex.: farmácia, loja on-line",
+            descriptionLabel = "Observações",
+            descriptionHelp = "Ex.: tomar com água, efeitos que sentiu, sabor.",
+            statuses = listOf("Em uso", "Pausado", "Concluído"),
+            extras = listOf(
+                ExtraField("marca", "Marca", "Ex.: Growth, Integralmedica, Vitafor"),
+                ExtraField("dose", "Dose", "Ex.: 3 g, 1 cápsula, 1 scoop (30 g)"),
+                ExtraField("horario", "Horário ou frequência", "Ex.: 1 vez ao dia, pela manhã, 08:00 e 20:00, após o treino"),
+                ExtraField("inicio", "Início", "Quando começou a tomar", FieldKind.DATE),
+                ExtraField("fim", "Fim", "Quando parou ou deve parar (deixe vazio se for contínuo)", FieldKind.DATE),
+            ),
+        )
         HealthType.ANAMNESE -> TypeSpec(
             titleLabel = "Título", titleHelp = "Ex.: Anamnese",
             professionalLabel = "Profissional", professionalHelp = "Opcional",

@@ -4,6 +4,8 @@
     <cache-path name="share" path="share/" />
     <!-- Foto temporária do "Prato por foto" (apagada ao sair da tela). -->
     <cache-path name="prato" path="prato/" />
+    <!-- Backup montado para enviar por e-mail. -->
+    <cache-path name="backup" path="backup/" />
     <!-- Anexos da seção Saúde (para abrir ou enviar o arquivo original). -->
     <files-path name="anexos" path="anexos/" />
 </paths>

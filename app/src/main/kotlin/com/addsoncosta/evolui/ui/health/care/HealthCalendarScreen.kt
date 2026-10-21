@@ -97,6 +97,7 @@ private fun titleSuggestions(type: HealthType): List<String> = when (type) {
     HealthType.BIOIMPEDANCIA -> listOf("Bioimpedância")
     HealthType.ANAMNESE -> emptyList()
     HealthType.OFTALMOLOGIA -> listOf("Consulta oftalmologista", "Exame de vista", "Mapeamento de retina", "Medir pressão do olho")
+    HealthType.SUPLEMENTACAO -> listOf("Tomar suplemento", "Creatina", "Whey protein", "Vitamina D", "Ômega 3", "Multivitamínico")
 }
 
 @Composable
@@ -415,7 +416,7 @@ private fun EventEditor(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        if (isNew && type == HealthType.MEDICACAO) {
+        if (isNew && (type == HealthType.MEDICACAO || type == HealthType.SUPLEMENTACAO)) {
             Panel {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {

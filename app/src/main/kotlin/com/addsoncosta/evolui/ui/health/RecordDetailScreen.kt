@@ -1,6 +1,8 @@
 package com.addsoncosta.evolui.ui.health
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,6 +24,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TableChart
@@ -37,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,7 +58,13 @@ import com.addsoncosta.evolui.data.HealthRecordEntity
 import com.addsoncosta.evolui.data.HealthRepository
 import com.addsoncosta.evolui.data.HealthType
 import com.addsoncosta.evolui.data.LabResultEntity
+import com.addsoncosta.evolui.backup.MissingFileNotice
+import com.addsoncosta.evolui.backup.OmittedFile
 import com.addsoncosta.evolui.health.Attachments
+import com.addsoncosta.evolui.health.AutoFill
+import com.addsoncosta.evolui.health.DocumentAutoFill
+import com.addsoncosta.evolui.health.Prescription
+import com.addsoncosta.evolui.health.TakeReminders
 import com.addsoncosta.evolui.health.FieldKind
 import com.addsoncosta.evolui.health.HealthFields
 import com.addsoncosta.evolui.health.LabCatalog
@@ -62,6 +72,7 @@ import com.addsoncosta.evolui.health.EyeExam
 import com.addsoncosta.evolui.health.ParsedExam
 import com.addsoncosta.evolui.health.ReportSummary
 import com.addsoncosta.evolui.ui.appContainer
+import com.addsoncosta.evolui.ui.health.care.rememberNotificationAsker
 import com.addsoncosta.evolui.ui.components.DateFormat
 import com.addsoncosta.evolui.ui.components.KeyValue
 import com.addsoncosta.evolui.ui.components.Overline
@@ -94,6 +105,23 @@ fun RecordDetailScreen(
     var suggestions by remember { mutableStateOf<ParsedExam?>(null) }
     var eyeSuggestion by remember { mutableStateOf<EyeExam?>(null) }
     var reportSuggestion by remember { mutableStateOf<ReportSummary?>(null) }
+    var fillSuggestion by remember { mutableStateOf<List<FoundField>?>(null) }
+    var prescriptionAsk by remember { mutableStateOf<Prescription?>(null) }
+    var remindAsk by remember { mutableStateOf(false) }
+    val askNotifications = rememberNotificationAsker()
+    // Anexos que não vieram num backup "sem fotos e anexos".
+    val missingFiles by container.repository.missingFiles.items.collectAsState()
+    var reattach by remember { mutableStateOf<OmittedFile?>(null) }
+    val reattachLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val item = reattach
+        reattach = null
+        if (uri != null && item != null) {
+            scope.launch {
+                val ok = container.repository.reattachFile(item, uri)
+                Toast.makeText(context, if (ok) "Arquivo anexado de novo." else "Não foi possível abrir este arquivo.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     val r = record
     LaunchedEffect(r) {
@@ -115,7 +143,17 @@ fun RecordDetailScreen(
             when {
                 eye != null && !eye.isEmpty -> eyeSuggestion = eye
                 report != null && !report.isEmpty -> reportSuggestion = report
-                parsed != null && !parsed.isEmpty && (spec.hasValues || parsed.date != null) -> suggestions = parsed
+                parsed != null && spec.hasValues && parsed.values.isNotEmpty() -> suggestions = parsed
+                else -> {
+                    // Outros documentos: oferece só os campos que estão vazios no registro.
+                    val found = data.fill?.let { emptyFieldsFound(r, type, extra, it) }.orEmpty()
+                    if (found.isNotEmpty()) fillSuggestion = found
+                }
+            }
+            val rx = data.fill?.prescription
+            if (rx != null && rx.medicines.isNotEmpty() && (type == HealthType.CONSULTA || type == HealthType.MEDICACAO)) {
+                val others = rx.medicines.filter { !it.name.equals(r.title, ignoreCase = true) }
+                if (others.isNotEmpty()) prescriptionAsk = rx.copy(medicines = others)
             }
         }
     }
@@ -168,6 +206,12 @@ fun RecordDetailScreen(
                     Icon(Icons.Filled.Edit, null)
                     Text("  Editar", fontWeight = FontWeight.Bold)
                 }
+                if (type == HealthType.MEDICACAO || type == HealthType.SUPLEMENTACAO) {
+                    OutlinedButton(onClick = { remindAsk = true }, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                        Icon(Icons.Filled.Notifications, null)
+                        Text("  Lembrar de tomar")
+                    }
+                }
             }
         }
         if (spec.hasValues && !reportExam) {
@@ -205,13 +249,21 @@ fun RecordDetailScreen(
             }
         }
         items(files, key = { it.id }) { f ->
-            AttachmentRow(
-                f,
-                onOpen = { Attachments.open(context, f) },
-                onShare = { Attachments.share(context, f) },
-                onText = { showText = f },
-                onRemove = { removeFile = f },
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                missingFiles.firstOrNull { it.fileName == f.fileName }?.let { item ->
+                    MissingFileNotice(item, onAttachAgain = {
+                        reattach = item
+                        reattachLauncher.launch(Attachments.pickerTypes)
+                    })
+                }
+                AttachmentRow(
+                    f,
+                    onOpen = { Attachments.open(context, f) },
+                    onShare = { Attachments.share(context, f) },
+                    onText = { showText = f },
+                    onRemove = { removeFile = f },
+                )
+            }
         }
         item {
             OutlinedButton(
@@ -300,6 +352,69 @@ fun RecordDetailScreen(
                 }
             },
             onDismiss = { reportSuggestion = null },
+        )
+    }
+    fillSuggestion?.let { fields ->
+        FillSuggestionsDialog(
+            fields = fields,
+            onApply = { chosen ->
+                scope.launch {
+                    var updated: HealthRecordEntity = r
+                    val newExtra = extra.toMutableMap()
+                    chosen.forEach { f ->
+                        when (f.key) {
+                            DocumentAutoFill.DATE -> f.value.toLongOrNull()?.let { updated = updated.copy(epochDay = it) }
+                            DocumentAutoFill.TITLE -> updated = updated.copy(title = f.value)
+                            DocumentAutoFill.PROFESSIONAL -> updated = updated.copy(professional = f.value)
+                            DocumentAutoFill.PLACE -> updated = updated.copy(place = f.value)
+                            else -> newExtra[f.key] = f.value
+                        }
+                    }
+                    updated = updated.copy(extra = HealthRepository.encodeExtra(newExtra))
+                    if (updated != r) repo.update(updated)
+                    if (chosen.isNotEmpty()) Toast.makeText(context, "Dados do arquivo adicionados. Confira.", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDismiss = { fillSuggestion = null },
+        )
+    }
+    prescriptionAsk?.let { rx ->
+        PrescriptionDialog(
+            prescription = rx,
+            note = "Escolha os remédios da receita que quer salvar em Medicação.",
+            confirmLabel = "Salvar em Medicação",
+            onConfirm = { meds, reminders ->
+                if (meds.isNotEmpty()) {
+                    scope.launch {
+                        val (n, alarms) = TakeReminders.saveMedicines(context.applicationContext, repo, container.database.healthEventDao(), rx, meds, reminders)
+                        Toast.makeText(
+                            context,
+                            "$n ${if (n == 1) "remédio salvo" else "remédios salvos"} em Medicação" + if (alarms > 0) " · $alarms lembretes" else "",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                }
+            },
+            onDismiss = { prescriptionAsk = null },
+            askNotifications = askNotifications,
+        )
+    }
+    if (remindAsk) {
+        TakeReminderDialog(
+            name = r.title,
+            initial = TakeReminders.planFor(type, r.epochDay, extra),
+            onConfirm = { plan ->
+                scope.launch {
+                    val n = TakeReminders.createFor(context.applicationContext, container.database.healthEventDao(), r, plan)
+                    Toast.makeText(
+                        context,
+                        if (n > 0) "$n ${if (n == 1) "lembrete criado" else "lembretes criados"} no calendário." else "Nenhum horário futuro nesse período.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            },
+            onDismiss = { remindAsk = false },
+            askNotifications = askNotifications,
         )
     }
     chart?.let { name ->
@@ -403,4 +518,23 @@ private fun EyeTable(extra: Map<String, String>) {
             }
         }
     }
+}
+
+/** Campos que a leitura achou e que estão vazios no registro (para o usuário escolher se usa). */
+private fun emptyFieldsFound(r: HealthRecordEntity, type: HealthType, extra: Map<String, String>, fill: AutoFill): List<FoundField> {
+    val spec = HealthFields.spec(type)
+    val out = mutableListOf<FoundField>()
+    fill.title?.let { if (r.title.isBlank() || r.title == type.singular) out += FoundField(DocumentAutoFill.TITLE, spec.titleLabel.removeSuffix(" *"), it) }
+    fill.professional?.let { if (r.professional.isNullOrBlank()) out += FoundField(DocumentAutoFill.PROFESSIONAL, spec.professionalLabel, it) }
+    fill.place?.let { if (r.place.isNullOrBlank()) out += FoundField(DocumentAutoFill.PLACE, spec.placeLabel.removeSuffix(" *"), it) }
+    fill.extras.forEach { (k, v) ->
+        if (extra[k].isNullOrBlank() && v.isNotBlank()) {
+            val shown = if (HealthFields.kind(type, k) == FieldKind.DATE) HealthRepository.parseDate(v)?.format(DateFormat) ?: v else v
+            out += FoundField(k, HealthFields.label(type, k), v, shown)
+        }
+    }
+    fill.date?.let { d ->
+        if (d.toEpochDay() != r.epochDay) out += FoundField(DocumentAutoFill.DATE, "Data do documento", d.toEpochDay().toString(), d.format(DateFormat))
+    }
+    return out
 }

@@ -54,7 +54,7 @@ jobs:
       # Esquema do banco gerado pelo Room, para conferir as migrações.
       - name: Mostrar esquema do banco
         if: always()
-        run: find app/schemas -name '4.json' -print -exec cat {} \; || true
+        run: find app/schemas -name '5.json' -print -exec cat {} \; || true
 
       - uses: actions/upload-artifact@v4
         with:

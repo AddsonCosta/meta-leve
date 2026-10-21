@@ -153,10 +153,10 @@ internal fun PressureForm(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            NumberField(sys, { sys = it.take(3) }, "Sistólica", Modifier.weight(1f), decimal = false, help = "máxima", error = sysError)
-            NumberField(dia, { dia = it.take(3) }, "Diastólica", Modifier.weight(1f), decimal = false, help = "mínima", error = diaError)
+            NumberField(sys, { sys = it.take(3) }, "Sistólica", Modifier.weight(1f), decimal = false, help = "máxima", error = sysError, highlight = fromPhoto)
+            NumberField(dia, { dia = it.take(3) }, "Diastólica", Modifier.weight(1f), decimal = false, help = "mínima", error = diaError, highlight = fromPhoto)
         }
-        NumberField(pulse, { pulse = it.take(3) }, "Pulso (opcional)", Modifier.fillMaxWidth(), suffix = "bpm", decimal = false, error = pulseError)
+        NumberField(pulse, { pulse = it.take(3) }, "Pulso (opcional)", Modifier.fillMaxWidth(), suffix = "bpm", decimal = false, error = pulseError, highlight = fromPhoto)
 
         if (s != null && d != null && valid) {
             val cat = BpCategory.of(s, d)
