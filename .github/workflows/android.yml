@@ -39,12 +39,18 @@ jobs:
           EVOLUI_KEYSTORE_PASSWORD: ${{ secrets.EVOLUI_KEYSTORE_PASSWORD }}
           EVOLUI_KEY_ALIAS: ${{ secrets.EVOLUI_KEY_ALIAS }}
           EVOLUI_KEY_PASSWORD: ${{ secrets.EVOLUI_KEY_PASSWORD }}
-        run: set -o pipefail; ./gradlew :app:bundleRelease --stacktrace 2>&1 | tee -a build.log
+        run: set -o pipefail; ./gradlew :app:bundleRelease :app:assembleRelease --stacktrace 2>&1 | tee -a build.log
 
       - uses: actions/upload-artifact@v4
         with:
           name: evolui-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+
+      # APK assinado para a Galaxy Store (Samsung), que recebe APK em vez de AAB.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evolui-release-apk
+          path: app/build/outputs/apk/release/*.apk
 
       - uses: actions/upload-artifact@v4
         with:
@@ -54,7 +60,7 @@ jobs:
       # Esquema do banco gerado pelo Room, para conferir as migrações.
       - name: Mostrar esquema do banco
         if: always()
-        run: find app/schemas -name '5.json' -print -exec cat {} \; || true
+        run: find app/schemas -name '6.json' -print -exec cat {} \; || true
 
       - uses: actions/upload-artifact@v4
         with:

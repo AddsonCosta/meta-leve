@@ -1,5 +1,6 @@
 package com.addsoncosta.evolui.backup
 
+import com.addsoncosta.evolui.i18n.Toasts
 import android.content.ActivityNotFoundException
 import android.net.Uri
 import android.widget.Toast
@@ -20,7 +21,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -68,9 +69,9 @@ fun BackupSection() {
             if (backup.chooseTarget(uri)) {
                 backup.setAuto(true)
                 backup.backupNow()
-                Toast.makeText(context, "Local escolhido. Fazendo o primeiro backup…", Toast.LENGTH_SHORT).show()
+                Toasts.makeText(context, "Local escolhido. Fazendo o primeiro backup…", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(context, "Não foi possível usar este local. Tente escolher de novo.", Toast.LENGTH_LONG).show()
+                Toasts.makeText(context, "Não foi possível usar este local. Tente escolher de novo.", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -80,7 +81,7 @@ fun BackupSection() {
         reattaching = null
         if (uri != null && item != null) scope.launch {
             val ok = repo.reattachFile(item, uri)
-            Toast.makeText(context, if (ok) "Arquivo anexado de novo" else "Não foi possível ler o arquivo", Toast.LENGTH_SHORT).show()
+            Toasts.makeText(context, if (ok) "Arquivo anexado de novo" else "Não foi possível ler o arquivo", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -88,7 +89,7 @@ fun BackupSection() {
         try {
             context.startActivity(backup.emailIntent(file, includeFiles))
         } catch (e: ActivityNotFoundException) {
-            Toast.makeText(context, "Nenhum app de e-mail encontrado", Toast.LENGTH_LONG).show()
+            Toasts.makeText(context, "Nenhum app de e-mail encontrado", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -99,7 +100,7 @@ fun BackupSection() {
             val file = runCatching { backup.buildEmailFile(includeFiles) }.getOrNull()
             emailBusy = false
             when {
-                file == null -> Toast.makeText(context, "Não foi possível montar o backup", Toast.LENGTH_SHORT).show()
+                file == null -> Toasts.makeText(context, "Não foi possível montar o backup", Toast.LENGTH_SHORT).show()
                 includeFiles && BackupRules.tooBigForEmail(file.length()) -> tooBig = TooBig(file)
                 else -> openEmail(file, includeFiles)
             }
@@ -242,7 +243,7 @@ fun BackupSection() {
                             repo.missingFiles.items.value.isNotEmpty() -> "Backup restaurado. Algumas fotos e anexos não vieram no arquivo; veja a lista em Backup."
                             else -> "Backup restaurado"
                         }
-                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                        Toasts.makeText(context, msg, Toast.LENGTH_LONG).show()
                     }
                 }) { Text("Restaurar") }
             },

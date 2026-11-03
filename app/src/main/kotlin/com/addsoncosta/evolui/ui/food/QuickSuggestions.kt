@@ -12,9 +12,8 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -40,8 +39,7 @@ internal fun QuickSuggestions(
     hint: String,
     modifier: Modifier = Modifier,
 ) {
-    // A refeição segue o relógio a cada vez que a tela abre.
-    LaunchedEffect(Unit) { vm.quickType.value = defaultMealType() }
+    // A refeição vem da escolha no topo da tela Comer (começa pelo horário).
     val type by vm.quickType.collectAsStateWithLifecycle()
     val frequent by vm.frequentFoods.collectAsStateWithLifecycle()
     val saved by vm.savedMeals.collectAsStateWithLifecycle()

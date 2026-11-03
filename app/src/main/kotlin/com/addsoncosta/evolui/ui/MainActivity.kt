@@ -22,7 +22,12 @@ import androidx.compose.ui.platform.LocalContext
 import com.addsoncosta.evolui.AppContainer
 import com.addsoncosta.evolui.EvoluiApp
 import com.addsoncosta.evolui.core.Profile
+import com.addsoncosta.evolui.i18n.I18n
 import com.addsoncosta.evolui.ui.onboarding.OnboardingScreen
+import com.addsoncosta.evolui.ui.settings.FirstLanguageScreen
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.addsoncosta.evolui.ui.theme.Evolui
 import com.addsoncosta.evolui.ui.theme.EvoluiTheme
 
@@ -66,9 +71,11 @@ private fun Root() {
     val state by produceState<ProfileState>(ProfileState.Loading) {
         container.repository.profile.collect { value = if (it == null) ProfileState.Missing else ProfileState.Ready(it) }
     }
+    val context = LocalContext.current
+    var languageChosen by remember { mutableStateOf(I18n.hasChosen(context)) }
     when (val s = state) {
         ProfileState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        ProfileState.Missing -> OnboardingScreen(initial = null, onDone = {})
+        ProfileState.Missing -> if (!languageChosen) FirstLanguageScreen(onDone = { languageChosen = true }) else OnboardingScreen(initial = null, onDone = {})
         is ProfileState.Ready -> MainScaffold()
     }
 }

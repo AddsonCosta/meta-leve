@@ -1,5 +1,6 @@
 package com.addsoncosta.evolui.ui.health
 
+import com.addsoncosta.evolui.i18n.Toasts
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
@@ -31,7 +32,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -285,7 +286,7 @@ private fun HealthHub(onOpen: (String) -> Unit, onOpenProgress: () -> Unit, onOp
                             try {
                                 sharePdf(context, HealthReports.pdf(context, ReportArea.GERAL))
                             } catch (e: Exception) {
-                                Toast.makeText(context, "Não foi possível gerar o relatório agora.", Toast.LENGTH_LONG).show()
+                                Toasts.makeText(context, "Não foi possível gerar o relatório agora.", Toast.LENGTH_LONG).show()
                             } finally {
                                 generating = false
                             }

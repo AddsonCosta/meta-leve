@@ -109,7 +109,8 @@ private const val WHITE = 0xFFFFFFFF.toInt()
  * fitas, sombra, coroa de louros (ouro em diante), borda serrilhada de metal, bisel, esmalte na cor
  * do badge, o símbolo em relevo, brilho e estrelinhas. Bloqueada: em cinza, com um cadeado.
  */
-fun drawBadgeMedal(canvas: Canvas, cx: Float, cy: Float, radius: Float, badge: Badge, earned: Boolean, palette: Palette) {
+@Suppress("unused")
+private fun drawClassicMedal(canvas: Canvas, cx: Float, cy: Float, radius: Float, badge: Badge, earned: Boolean, palette: Palette) {
     val tier = badge.tier
     val accent = withAlpha(badge.color.argbIn(palette), 255)
     val r = radius

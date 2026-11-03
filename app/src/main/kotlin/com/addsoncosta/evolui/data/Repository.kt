@@ -83,6 +83,26 @@ class Repository(private val context: Context, private val db: AppDatabase) {
 
     suspend fun deleteMeal(meal: MealEntity) = db.mealDao().delete(meal)
 
+    /**
+     * Corrige um registro de refeição: nova quantidade em gramas, refeição e dia.
+     * Os nutrientes mudam na mesma proporção dos gramas.
+     */
+    suspend fun editMeal(meal: MealEntity, grams: Double, mealType: MealType, date: LocalDate) {
+        val f = if (meal.grams > 0) grams / meal.grams else 1.0
+        db.mealDao().update(
+            meal.copy(
+                grams = grams,
+                mealType = mealType.name,
+                epochDay = date.toEpochDay(),
+                kcal = meal.kcal * f,
+                protein = meal.protein * f,
+                fat = meal.fat * f,
+                carb = meal.carb * f,
+                amount = meal.amount?.let { it * f },
+            )
+        )
+    }
+
     fun exercises(): Flow<List<ExerciseEntity>> = db.exerciseDao().observeAll()
 
     suspend fun setExerciseFavorite(exercise: ExerciseEntity, favorite: Boolean) =
@@ -99,6 +119,12 @@ class Repository(private val context: Context, private val db: AppDatabase) {
     }
 
     suspend fun deleteWorkout(workout: WorkoutEntity) = db.workoutDao().delete(workout)
+
+    /** Corrige um treino: novos minutos e dia; as calorias mudam na mesma proporção dos minutos. */
+    suspend fun editWorkout(workout: WorkoutEntity, minutes: Double, date: LocalDate) {
+        val f = if (workout.minutes > 0) minutes / workout.minutes else 1.0
+        db.workoutDao().update(workout.copy(minutes = minutes, kcal = workout.kcal * f, epochDay = date.toEpochDay()))
+    }
 
     /** Grava treinos vindos do Health Connect, ignorando os que já foram importados. Devolve quantos entraram. */
     suspend fun importWorkouts(workouts: List<WorkoutEntity>): Int {
@@ -232,6 +258,8 @@ class Repository(private val context: Context, private val db: AppDatabase) {
             teeth = db.toothStateDao().all(),
             cycles = db.menstrualCycleDao().all(),
             bloodPressure = db.bloodPressureDao().all(),
+            dailyTasks = db.dailyTaskDao().all(),
+            dailyTaskLogs = db.dailyTaskDao().allLogs(),
             routine = db.routineDao().all(),
         )
         json.encodeToString(Backup.serializer(), backup)
@@ -387,6 +415,8 @@ class Repository(private val context: Context, private val db: AppDatabase) {
             db.bloodPressureDao().clear()
             db.routineDao().clear()
             db.routineDao().clearAllSkips()
+            db.dailyTaskDao().clear()
+            db.dailyTaskDao().clearLogs()
             // Fotos: backups antigos (só .json) não trazem as fotos; nesse caso mantém as atuais.
             if (backup.version >= 3) db.photoDao().clear()
 
@@ -415,6 +445,8 @@ class Repository(private val context: Context, private val db: AppDatabase) {
             db.menstrualCycleDao().insertAll(backup.cycles)
             db.bloodPressureDao().insertAll(backup.bloodPressure)
             db.routineDao().insertAll(backup.routine)
+            db.dailyTaskDao().insertAll(backup.dailyTasks)
+            db.dailyTaskDao().insertLogs(backup.dailyTaskLogs)
         }
         // Arquivos que ficaram de fora do backup e não existem neste celular: o registro mostra o aviso para anexar de novo.
         missingFiles.replaceAll(
@@ -479,6 +511,9 @@ data class Backup(
     val bloodPressure: List<BloodPressureEntity> = emptyList(),
     /** Rotina do dia a dia (versão 0.5.0 em diante). */
     val routine: List<RoutineEntryEntity> = emptyList(),
+    /** Tarefas diárias de treino e as séries feitas (versão 1.0 em diante). */
+    val dailyTasks: List<DailyTaskEntity> = emptyList(),
+    val dailyTaskLogs: List<DailyTaskLogEntity> = emptyList(),
     /** Falso quando o .zip foi feito "sem fotos e anexos" (versão 4 em diante). */
     val includesFiles: Boolean = true,
     /** Descrição de cada foto ou anexo deixado de fora (só quando [includesFiles] é falso). */

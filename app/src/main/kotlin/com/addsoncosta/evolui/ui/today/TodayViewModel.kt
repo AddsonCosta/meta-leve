@@ -9,6 +9,7 @@ import com.addsoncosta.evolui.core.EnergyCalculator
 import com.addsoncosta.evolui.core.Profile
 import com.addsoncosta.evolui.data.DayLogEntity
 import com.addsoncosta.evolui.data.MealEntity
+import com.addsoncosta.evolui.data.MealType
 import com.addsoncosta.evolui.data.RoutineDayEntry
 import com.addsoncosta.evolui.data.RoutineEntryEntity
 import com.addsoncosta.evolui.data.RoutineRepository
@@ -148,6 +149,17 @@ class TodayViewModel(private val container: AppContainer) : ViewModel() {
         val next = date.value.plusDays(days)
         if (!next.isAfter(LocalDate.now())) date.value = next
     }
+
+    /** Vai direto para um dia (nunca depois de hoje). */
+    fun setDay(day: LocalDate) {
+        date.value = if (day.isAfter(LocalDate.now())) LocalDate.now() else day
+    }
+
+    fun editMeal(meal: MealEntity, grams: Double, type: MealType, day: LocalDate) =
+        viewModelScope.launch { repo.editMeal(meal, grams, type, day) }
+
+    fun editWorkout(workout: WorkoutEntity, minutes: Double, day: LocalDate) =
+        viewModelScope.launch { repo.editWorkout(workout, minutes, day) }
 
     fun setWeight(kg: Double) = viewModelScope.launch { repo.updateDay(date.value) { it.copy(weightKg = kg) } }
 

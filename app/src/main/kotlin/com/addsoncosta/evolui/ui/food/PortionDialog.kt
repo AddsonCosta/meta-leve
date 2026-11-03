@@ -20,7 +20,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -101,6 +101,7 @@ internal fun PortionDialog(
     confirmLabel: String = "Registrar",
     showMealType: Boolean = true,
     initial: PortionChoice? = null,
+    initialType: MealType = defaultMealType(),
     onEditFood: (() -> Unit)? = null,
     onDeleteFood: (() -> Unit)? = null,
 ) {
@@ -109,7 +110,7 @@ internal fun PortionDialog(
     val measures = remember(food, portions) { Portions.measures(food, portions) }
     var measureKey by remember(food.id) { mutableStateOf(Portions.GRAMS) }
     var amountText by remember(food.id) { mutableStateOf(Portions.inputText(initial?.grams ?: 100.0)) }
-    var type by remember { mutableStateOf(defaultMealType()) }
+    var type by remember { mutableStateOf(initialType) }
     var ready by remember(food.id) { mutableStateOf(false) }
     var addingMeasure by remember { mutableStateOf(false) }
     var deletingMeasure by remember { mutableStateOf<Measure?>(null) }

@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.addsoncosta.evolui.EvoluiApp
+import com.addsoncosta.evolui.habits.HabitReminders
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,6 +24,7 @@ class ReminderReceiver : BroadcastReceiver() {
                     Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> {
                         Reminders.ensureChannel(context)
                         Reminders.rescheduleAll(context)
+                        HabitReminders.rescheduleAll(context)
                     }
                     Reminders.ACTION_REMIND -> {
                         val id = intent.getLongExtra(Reminders.EXTRA_EVENT_ID, 0L)

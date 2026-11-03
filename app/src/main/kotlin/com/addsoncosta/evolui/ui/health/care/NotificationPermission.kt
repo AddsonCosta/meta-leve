@@ -6,7 +6,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,7 +22,9 @@ import androidx.core.content.ContextCompat
  * explicando antes o porquê. Devolve a função a chamar quando um lembrete for escolhido.
  */
 @Composable
-internal fun rememberNotificationAsker(): () -> Unit {
+internal fun rememberNotificationAsker(
+    reason: String = "Para lembrar você da consulta, do exame ou do remédio na hora certa, o Evolui precisa mostrar notificações.",
+): () -> Unit {
     val context = LocalContext.current
     var asked by rememberSaveable { mutableStateOf(false) }
     var showWhy by remember { mutableStateOf(false) }
@@ -35,7 +37,7 @@ internal fun rememberNotificationAsker(): () -> Unit {
         AlertDialog(
             onDismissRequest = { showWhy = false },
             title = { Text("Permitir avisos?") },
-            text = { Text("Para lembrar você da consulta, do exame ou do remédio na hora certa, o Evolui precisa mostrar notificações. Na próxima tela, toque em \"Permitir\".") },
+            text = { Text("$reason Na próxima tela, toque em \"Permitir\".") },
             confirmButton = {
                 TextButton(onClick = {
                     showWhy = false

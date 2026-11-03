@@ -97,7 +97,7 @@ object Badges {
     val all: List<Badge> = listOf(
         Badge("primeira_refeicao", "Primeiro prato", "Registrou a primeira refeição.", Icons.Filled.Restaurant, "🍽️", BadgeColor.NEON, "dia") { count(it.mealDays, 1) },
         Badge("sequencia_3", "3 dias seguidos", "Registrou a alimentação 3 dias seguidos.", Icons.Filled.Whatshot, "🔥", BadgeColor.ORANGE, "dias") { count(it.bestMealStreak, 3) },
-        Badge("sequencia_7", "Uma semana firme", "7 dias seguidos registrando o que comeu.", Icons.Filled.LocalFireDepartment, "🔥", BadgeColor.ORANGE, "dias") { count(it.bestMealStreak, 7) },
+        Badge("sequencia_7", "Uma semana firme", "7 dias seguidos registrando o que consumiu.", Icons.Filled.LocalFireDepartment, "🔥", BadgeColor.ORANGE, "dias") { count(it.bestMealStreak, 7) },
         Badge("sequencia_30", "Um mês de foco", "30 dias seguidos registrando a alimentação.", Icons.Filled.CalendarMonth, "📅", BadgeColor.PURPLE, "dias") { count(it.bestMealStreak, 30) },
         Badge("sequencia_100", "100 dias!", "100 dias seguidos registrando. Hábito formado!", Icons.Filled.WorkspacePremium, "🏆", BadgeColor.PURPLE, "dias") { count(it.bestMealStreak, 100) },
 

@@ -133,6 +133,9 @@ interface MealDao {
     @Delete
     suspend fun delete(meal: MealEntity)
 
+    @androidx.room.Update
+    suspend fun update(meal: MealEntity)
+
     @Query("DELETE FROM meal")
     suspend fun clear()
 }

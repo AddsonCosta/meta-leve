@@ -1,5 +1,6 @@
 package com.addsoncosta.evolui.ui.health
 
+import com.addsoncosta.evolui.i18n.Toasts
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,7 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -118,7 +119,7 @@ fun RecordDetailScreen(
         if (uri != null && item != null) {
             scope.launch {
                 val ok = container.repository.reattachFile(item, uri)
-                Toast.makeText(context, if (ok) "Arquivo anexado de novo." else "Não foi possível abrir este arquivo.", Toast.LENGTH_SHORT).show()
+                Toasts.makeText(context, if (ok) "Arquivo anexado de novo." else "Não foi possível abrir este arquivo.", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -326,7 +327,7 @@ fun RecordDetailScreen(
                     if (date != null) updated = updated.copy(epochDay = date.toEpochDay())
                     if (values.isNotEmpty()) updated = updated.copy(extra = HealthRepository.encodeExtra(extra + values))
                     if (updated != r) repo.update(updated)
-                    Toast.makeText(context, "Dados da receita adicionados. Confira.", Toast.LENGTH_SHORT).show()
+                    Toasts.makeText(context, "Dados da receita adicionados. Confira.", Toast.LENGTH_SHORT).show()
                 }
             },
             onDismiss = { eyeSuggestion = null },
@@ -348,7 +349,7 @@ fun RecordDetailScreen(
                     s.place?.let { if (updated.place.isNullOrBlank()) updated = updated.copy(place = it) }
                     s.requestingDoctor?.let { if (updated.professional.isNullOrBlank()) updated = updated.copy(professional = it) }
                     if (updated != r) repo.update(updated)
-                    Toast.makeText(context, "Resumo do laudo guardado. Confira.", Toast.LENGTH_SHORT).show()
+                    Toasts.makeText(context, "Resumo do laudo guardado. Confira.", Toast.LENGTH_SHORT).show()
                 }
             },
             onDismiss = { reportSuggestion = null },
@@ -372,7 +373,7 @@ fun RecordDetailScreen(
                     }
                     updated = updated.copy(extra = HealthRepository.encodeExtra(newExtra))
                     if (updated != r) repo.update(updated)
-                    if (chosen.isNotEmpty()) Toast.makeText(context, "Dados do arquivo adicionados. Confira.", Toast.LENGTH_SHORT).show()
+                    if (chosen.isNotEmpty()) Toasts.makeText(context, "Dados do arquivo adicionados. Confira.", Toast.LENGTH_SHORT).show()
                 }
             },
             onDismiss = { fillSuggestion = null },
@@ -387,7 +388,7 @@ fun RecordDetailScreen(
                 if (meds.isNotEmpty()) {
                     scope.launch {
                         val (n, alarms) = TakeReminders.saveMedicines(context.applicationContext, repo, container.database.healthEventDao(), rx, meds, reminders)
-                        Toast.makeText(
+                        Toasts.makeText(
                             context,
                             "$n ${if (n == 1) "remédio salvo" else "remédios salvos"} em Medicação" + if (alarms > 0) " · $alarms lembretes" else "",
                             Toast.LENGTH_LONG,
@@ -406,7 +407,7 @@ fun RecordDetailScreen(
             onConfirm = { plan ->
                 scope.launch {
                     val n = TakeReminders.createFor(context.applicationContext, container.database.healthEventDao(), r, plan)
-                    Toast.makeText(
+                    Toasts.makeText(
                         context,
                         if (n > 0) "$n ${if (n == 1) "lembrete criado" else "lembretes criados"} no calendário." else "Nenhum horário futuro nesse período.",
                         Toast.LENGTH_LONG,
@@ -432,7 +433,7 @@ fun RecordDetailScreen(
                     if (lab != null && updated.place.isNullOrBlank()) updated = updated.copy(place = lab)
                     if (updated != r) repo.update(updated)
                     if (values.isNotEmpty()) repo.mergeResults(updated, values.map { it.toResult() })
-                    Toast.makeText(context, "Dados adicionados. Confira os valores.", Toast.LENGTH_SHORT).show()
+                    Toasts.makeText(context, "Dados adicionados. Confira os valores.", Toast.LENGTH_SHORT).show()
                 }
             },
             onDismiss = { suggestions = null },

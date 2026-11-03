@@ -1,5 +1,6 @@
 package com.addsoncosta.evolui.ui.health
 
+import com.addsoncosta.evolui.i18n.Toasts
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -39,7 +40,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -278,7 +279,7 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
         }
         offerPrescription(data.fill?.prescription)
         if (filled > 0) {
-            Toast.makeText(context, "Preenchemos $filled ${if (filled == 1) "campo" else "campos"} com o arquivo. Confira.", Toast.LENGTH_SHORT).show()
+            Toasts.makeText(context, "Preenchemos $filled ${if (filled == 1) "campo" else "campos"} com o arquivo. Confira.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -287,7 +288,7 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
         val sources = pending.map { AiSource(Attachments.file(context, it.fileName), it.mimeType, it.ocrText) } +
             savedFiles.map { AiSource(Attachments.file(context, it.fileName), it.mimeType, it.ocrText) }
         if (sources.isEmpty()) {
-            Toast.makeText(context, "Anexe um arquivo primeiro.", Toast.LENGTH_SHORT).show()
+            Toasts.makeText(context, "Anexe um arquivo primeiro.", Toast.LENGTH_SHORT).show()
             return
         }
         aiBusy = true
@@ -297,14 +298,14 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
                     .onSuccess { fill ->
                         val n = applyFill(fill)
                         offerPrescription(fill.prescription)
-                        Toast.makeText(
+                        Toasts.makeText(
                             context,
                             if (n > 0) "Sua IA preencheu $n ${if (n == 1) "campo" else "campos"}. Confira." else "Sua IA não achou mais nada para preencher.",
                             Toast.LENGTH_SHORT,
                         ).show()
                     }
                     .onFailure { e ->
-                        Toast.makeText(context, e.message ?: "Não deu para ler com a IA agora.", Toast.LENGTH_LONG).show()
+                        Toasts.makeText(context, e.message ?: "Não deu para ler com a IA agora.", Toast.LENGTH_LONG).show()
                     }
             } finally {
                 aiBusy = false
@@ -369,7 +370,7 @@ fun RecordFormScreen(type: HealthType, recordId: Long, onBack: () -> Unit, onSav
                 if (created > 0) "$created ${if (created == 1) "remédio salvo" else "remédios salvos"} em Medicação" else null,
                 if (alarms > 0) "$alarms ${if (alarms == 1) "lembrete criado" else "lembretes criados"}" else null,
             ).joinToString(" · ")
-            if (msg.isNotBlank()) Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            if (msg.isNotBlank()) Toasts.makeText(context, msg, Toast.LENGTH_LONG).show()
             saving = false
             onSaved(id)
         }

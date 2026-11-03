@@ -1,5 +1,6 @@
 package com.addsoncosta.evolui.ui.health
 
+import com.addsoncosta.evolui.i18n.Toasts
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -25,7 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -106,7 +107,7 @@ fun ShareChoicesSheet(
                 action()
                 onDismiss()
             } catch (e: Exception) {
-                Toast.makeText(context, "Não foi possível gerar agora. Tente de novo.", Toast.LENGTH_LONG).show()
+                Toasts.makeText(context, "Não foi possível gerar agora. Tente de novo.", Toast.LENGTH_LONG).show()
             } finally {
                 busy = null
             }
@@ -138,7 +139,7 @@ fun ShareChoicesSheet(
             ShareOption(Icons.Filled.ContentCopy, "Copiar", "Copia o texto para colar onde quiser", busy == "copy") {
                 launchAction("copy") {
                     copyText(context, text())
-                    Toast.makeText(context, "Texto copiado", Toast.LENGTH_SHORT).show()
+                    Toasts.makeText(context, "Texto copiado", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -181,6 +182,6 @@ fun openPdf(context: Context, file: File) {
     try {
         context.startActivity(view)
     } catch (e: ActivityNotFoundException) {
-        Toast.makeText(context, "Nenhum leitor de PDF encontrado. Use \"PDF\" para enviar.", Toast.LENGTH_LONG).show()
+        Toasts.makeText(context, "Nenhum leitor de PDF encontrado. Use \"PDF\" para enviar.", Toast.LENGTH_LONG).show()
     }
 }

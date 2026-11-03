@@ -77,6 +77,9 @@ object HealthFields {
                 ExtraField("especialidade", "Especialidade", "Ex.: Cardiologia, clínico geral"),
                 ExtraField("motivo", "Motivo da consulta", "Ex.: dor no peito, check-up anual", FieldKind.LONG_TEXT),
                 ExtraField("diagnostico", "Diagnóstico e orientações", "O que o médico disse e recomendou", FieldKind.LONG_TEXT),
+                ExtraField("receita", "Receita", "Remédios receitados nesta consulta", FieldKind.LONG_TEXT),
+                ExtraField("procedimento", "Procedimentos e exames pedidos", "Ex.: eletrocardiograma, hemograma, curativo", FieldKind.LONG_TEXT),
+                ExtraField("encaminhamento", "Encaminhamento", "Para qual especialista ou serviço. Ex.: Cardiologia", FieldKind.LONG_TEXT),
                 ExtraField("retorno", "Retorno", "Data do retorno, se houver", FieldKind.DATE),
             ),
         )

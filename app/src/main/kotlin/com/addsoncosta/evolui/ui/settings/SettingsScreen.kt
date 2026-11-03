@@ -18,7 +18,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -77,6 +77,7 @@ fun SettingsScreen(onBack: () -> Unit) {
         }
         Button(onClick = { editing = true }, modifier = Modifier.fillMaxWidth()) { Text("Editar perfil e meta") }
 
+        LanguagePicker()
         ThemePicker()
 
         // Minha IA (prato por foto com a IA do próprio usuário).

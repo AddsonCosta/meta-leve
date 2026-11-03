@@ -1,5 +1,6 @@
 package com.addsoncosta.evolui.ui.health.pressure
 
+import com.addsoncosta.evolui.i18n.Toasts
 import android.content.ActivityNotFoundException
 import android.net.Uri
 import android.widget.Toast
@@ -38,7 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -116,7 +117,7 @@ fun PressureScreen(onBack: () -> Unit) {
             try {
                 val result = PressureOcr.read(context, uri)
                 if (result.candidates.isEmpty()) {
-                    Toast.makeText(
+                    Toasts.makeText(
                         context,
                         if (result.text == null) "Não deu para ler a foto neste celular. Digite os valores olhando o visor."
                         else "Não encontramos os números da pressão na foto. Digite os valores olhando o visor.",
@@ -143,9 +144,9 @@ fun PressureScreen(onBack: () -> Unit) {
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", cameraFile)
             camera.launch(uri)
         } catch (e: ActivityNotFoundException) {
-            Toast.makeText(context, "Nenhum app de câmera encontrado. Escolha uma foto da galeria.", Toast.LENGTH_LONG).show()
+            Toasts.makeText(context, "Nenhum app de câmera encontrado. Escolha uma foto da galeria.", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
-            Toast.makeText(context, "Não foi possível abrir a câmera.", Toast.LENGTH_LONG).show()
+            Toasts.makeText(context, "Não foi possível abrir a câmera.", Toast.LENGTH_LONG).show()
         }
     }
 

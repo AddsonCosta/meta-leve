@@ -1,5 +1,6 @@
 package com.addsoncosta.evolui.ui.food
 
+import com.addsoncosta.evolui.i18n.Toasts
 import android.content.ActivityNotFoundException
 import android.graphics.Bitmap
 import android.widget.Toast
@@ -42,7 +43,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -202,7 +203,7 @@ internal fun PhotoMealScreen(vm: FoodViewModel, onClose: () -> Unit, estimator: 
     var plate by remember { mutableStateOf<List<PlateItem>>(emptyList()) }
     var adding by remember { mutableStateOf(false) }
     var adjusting by remember { mutableStateOf<PlateItem?>(null) }
-    var type by remember { mutableStateOf(defaultMealType()) }
+    var type by remember { mutableStateOf(vm.quickType.value) }
     var job by remember { mutableStateOf<Job?>(null) }
     val dir = remember { File(context.cacheDir, PHOTO_DIR) }
     val ai = remember { AiDocumentReader(context) }
@@ -412,6 +413,8 @@ internal fun PhotoMealScreen(vm: FoodViewModel, onClose: () -> Unit, estimator: 
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxWidth().height(200.dp).clip(MaterialTheme.shapes.medium),
                             )
+                            // Logo abaixo da foto, para achar sem rolar a tela.
+                            if (!busy) AiButton(aiConnected, aiName, onAnalyze = { analyzeWithAi() }, onConnect = { connectingAi = true })
                         } else {
                             Text(
                                 "Tire uma foto do prato (de cima, com boa luz) ou escolha uma da galeria. " +
@@ -450,12 +453,11 @@ internal fun PhotoMealScreen(vm: FoodViewModel, onClose: () -> Unit, estimator: 
                         Panel {
                             Text("Não reconheci este prato.", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                if (aiConnected) "Use sua IA para identificar os alimentos e as porções, ou escolha nas sugestões abaixo."
-                                else "Use sua IA para identificar: conecte a sua (Claude, ChatGPT, Gemini e outras). " +
+                                if (aiConnected) "Use o botão da sua IA, logo abaixo da foto, para identificar os alimentos e as porções, ou escolha nas sugestões abaixo."
+                                else "Conecte a sua IA (Claude, ChatGPT, Gemini e outras) pelo botão logo abaixo da foto. " +
                                     "Ou escolha nas sugestões abaixo.",
                                 style = MaterialTheme.typography.bodyMedium,
                             )
-                            AiButton(aiConnected, aiName, onAnalyze = { analyzeWithAi() }, onConnect = { connectingAi = true })
                         }
                     }
                 }
@@ -518,9 +520,6 @@ internal fun PhotoMealScreen(vm: FoodViewModel, onClose: () -> Unit, estimator: 
                         }
                     }
                 }
-                if (photo != null && !busy && !unrecognized) {
-                    item(key = "ia") { AiButton(aiConnected, aiName, onAnalyze = { analyzeWithAi() }, onConnect = { connectingAi = true }) }
-                }
                 item(key = "sugestoes") {
                     QuickSuggestions(
                         vm = vm,
@@ -578,7 +577,7 @@ internal fun PhotoMealScreen(vm: FoodViewModel, onClose: () -> Unit, estimator: 
                                 onClick = {
                                     vm.logPlate(chosen.map { it.food to it.choice }, type)
                                     val n = chosen.size
-                                    Toast.makeText(
+                                    Toasts.makeText(
                                         context,
                                         (if (n == 1) "1 alimento registrado" else "$n alimentos registrados") + " em ${type.label}",
                                         Toast.LENGTH_SHORT,

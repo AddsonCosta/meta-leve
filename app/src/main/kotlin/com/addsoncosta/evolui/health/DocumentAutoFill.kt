@@ -84,19 +84,7 @@ object DocumentAutoFill {
             place = place(raw, folded, usedPlaces),
         )
         val specific = when (type) {
-            HealthType.CONSULTA -> {
-                val extras = buildMap {
-                    rx.specialty?.let { put("especialidade", it) }
-                    returnDate(folded, rx.date ?: today)?.let { put("retorno", it.toString()) }
-                    afterLabel(raw, folded, "hipotese diagnostica|diagnostico|cid|conduta")?.let { put("diagnostico", it) }
-                    afterLabel(raw, folded, "motivo da consulta|motivo|queixa principal|queixa")?.let { put("motivo", it) }
-                }
-                AutoFill(
-                    title = rx.specialty?.let { "Consulta de ${it.lowercase()}" },
-                    extras = extras,
-                    prescription = rx.takeIf { it.medicines.isNotEmpty() && it.looksLikePrescription },
-                )
-            }
+            HealthType.CONSULTA -> consultation(raw, folded, rx, professional, today)
             HealthType.MEDICACAO -> {
                 val m = rx.medicines.firstOrNull()
                 AutoFill(
@@ -128,6 +116,115 @@ object DocumentAutoFill {
             HealthType.EXAME, HealthType.OFTALMOLOGIA, HealthType.ANAMNESE -> AutoFill()
         }
         return specific.orElse(base)
+    }
+
+    // ---------- Consulta ----------
+
+    private const val DIAGNOSIS_LABELS = "hipotese diagnostica|hipoteses diagnosticas|impressao diagnostica|diagnosticos?|hd|cid(?:-?10)?|" +
+        "parecer|avaliacao|conclusao"
+    private const val GUIDANCE_LABELS = "conduta|orientacoes|orientacao|recomendacoes|plano terapeutico|plano de tratamento"
+    private const val REASON_LABELS = "motivo da consulta|motivo do atendimento|motivo|queixa principal|queixas?|qp|" +
+        "historia da doenca atual|hda|anamnese|sintomas"
+    private const val PROCEDURE_LABELS = "procedimentos? realizados?|procedimentos?|exames? solicitados?|solicitacao de exames?|" +
+        "pedido de exames?|exames? pedidos?|exames? complementares|solicito|solicita-se"
+    private const val REFERRAL_LABELS = "encaminhamento|encaminho(?: (?:a|ao|a o|para|o paciente|a paciente)(?: (?:ao|a|para))?)?|encaminhada?|encaminhar"
+
+    /** Qualquer rótulo conhecido (para saber onde termina o texto de outro rótulo). */
+    private val anyLabel = Regex(
+        "^\\s*(?:\\d+[.)]\\s*)?(?:(?:$DIAGNOSIS_LABELS|$GUIDANCE_LABELS|$REASON_LABELS|$PROCEDURE_LABELS|encaminhamento|exame fisico|prescricao|receita|" +
+            "uso oral|uso interno|uso continuo|paciente|data|medicacoes?|medicamentos?|observacoes?|obs|evolucao|exame fisico)(?:\\s*[:\\-]|\\s*$)|retorno(?![a-z]))",
+    )
+
+    private fun consultation(raw: List<String>, folded: List<String>, rx: Prescription, professional: String?, today: LocalDate): AutoFill {
+        val referral = referral(raw, folded)
+        // A especialidade da consulta não é a do encaminhamento ("encaminho ao cardiologista").
+        val specialty = rx.specialty
+        // Seções do prontuário ("Hipótese diagnóstica:") não são remédios.
+        val medicines = rx.medicines.filter { m -> !anyLabel.containsMatchIn(TextScan.fold(m.line.ifBlank { m.name })) }
+            .takeIf { rx.looksLikePrescription }.orEmpty()
+        val extras = buildMap {
+            specialty?.let { put("especialidade", it) }
+            returnDate(folded, rx.date ?: today)?.let { put("retorno", it.toString()) }
+            listOfNotNull(labeled(raw, folded, DIAGNOSIS_LABELS), labeled(raw, folded, GUIDANCE_LABELS)).distinct()
+                .joinToString("\n").takeIf { it.isNotEmpty() }?.let { put("diagnostico", it) }
+            labeled(raw, folded, REASON_LABELS)?.let { put("motivo", it) }
+            (labeled(raw, folded, PROCEDURE_LABELS) ?: procedureLines(raw, folded))?.let { put("procedimento", it) }
+            referral?.let { put("encaminhamento", it) }
+            if (medicines.isNotEmpty()) put("receita", medicines.joinToString("\n") { it.line.ifBlank { it.name } })
+        }
+        val title = when {
+            specialty != null -> "Consulta de ${specialty.lowercase()}"
+            professional != null -> "Consulta com $professional"
+            rx.date != null || extras.isNotEmpty() -> "Consulta médica"
+            else -> null
+        }
+        return AutoFill(
+            title = title,
+            extras = extras,
+            prescription = rx.copy(medicines = medicines).takeIf { medicines.isNotEmpty() },
+        )
+    }
+
+    /**
+     * Texto depois de "Rótulo:" (na mesma linha e nas seguintes, até o próximo rótulo).
+     * Junta até 6 linhas e corta em 500 letras.
+     */
+    private fun labeled(raw: List<String>, folded: List<String>, labels: String): String? {
+        val re = Regex("^\\s*(?:\\d+[.)]\\s*)?(?:$labels)(?![a-z])\\s*[:\\-]?\\s*")
+        for (i in folded.indices) {
+            val m = re.find(folded[i]) ?: continue
+            val same = raw[i].substring(m.range.last + 1).trim()
+            // Sem ":" e sem nada depois, só vale se a linha for só o rótulo (título de seção).
+            val head = folded[i].substring(m.range.first, m.range.last + 1)
+            val verb = Regex("(?<![a-z])(solicito|solicita-se|encaminho|encaminhar|encaminhada?)(?![a-z])").containsMatchIn(head)
+            if (same.isNotEmpty() && !verb && !head.contains(':') && !head.contains('-')) continue
+            val parts = mutableListOf<String>()
+            if (same.isNotEmpty()) parts += same
+            var j = i + 1
+            while (j < raw.size && parts.size < 6) {
+                val f = folded[j]
+                if (anyLabel.containsMatchIn(f) || isFooter(f)) break
+                parts += raw[j]
+                j++
+                if (same.isNotEmpty() && parts.size >= 3) break
+            }
+            val text = parts.joinToString("\n").trim().take(500)
+            if (text.count { it.isLetterOrDigit() } >= 3) return text
+        }
+        return null
+    }
+
+    /** Linhas de assinatura, data e local que encerram o documento. */
+    private fun isFooter(f: String): Boolean =
+        Regex("(?<![a-z])(crm|cremesp|rqe|assinatura|carimbo)(?![a-z])").containsMatchIn(f) ||
+            Regex("^[a-z ]{3,30},\\s*\\d{1,2}(?:/|\\s+de\\s+)").containsMatchIn(f) ||
+            Regex("^(?:dra?\\.?|doutora?)\\s").containsMatchIn(f)
+
+    /** Sem rótulo: frases como "Solicito hemograma e TSH" ou "Realizado curativo". */
+    private fun procedureLines(raw: List<String>, folded: List<String>): String? {
+        val re = Regex("(?<![a-z])(solicito|solicitad[oa]s?|realizad[oa]s? (?:o |a )?(?:procedimento|curativo|sutura|drenagem|infiltracao|biopsia|cauterizacao|retirada)|" +
+            "pedido de|fazer exames?|realizar exames?)(?![a-z])")
+        val found = folded.indices.filter { re.containsMatchIn(folded[it]) && !folded[it].contains("encaminh") }.map { raw[it] }
+        return found.takeIf { it.isNotEmpty() }?.joinToString("\n")?.take(500)
+    }
+
+    /** "Encaminho ao cardiologista", "Encaminhamento: Ortopedia" viram a especialidade (e o motivo, se houver). */
+    private fun referral(raw: List<String>, folded: List<String>): String? {
+        for (i in folded.indices) {
+            val f = folded[i]
+            val k = f.indexOf("encaminh")
+            if (k < 0) continue
+            val window = (f.substring(k) + " " + folded.getOrNull(i + 1).orEmpty())
+            val spec = PrescriptionParser.specialties.firstOrNull { it.first.containsMatchIn(window) }?.second
+            val text = labeled(raw, folded, REFERRAL_LABELS)
+            return when {
+                spec != null && text != null && TextScan.fold(text).length > 25 -> "$spec. $text"
+                spec != null -> spec
+                text != null -> text
+                else -> raw[i].substring(k).trim().take(200).takeIf { it.count { c -> c.isLetter() } >= 12 }
+            }
+        }
+        return null
     }
 
     /** Campos da Medicação a partir de um remédio da receita. */
@@ -184,6 +281,13 @@ object DocumentAutoFill {
         for (p in usedPlaces) {
             val n = TextScan.fold(p.trim())
             if (n.length >= 4 && head.any { it.contains(n) }) return p
+        }
+        // "Unidade: Policlínica Central   Especialidade: ..." (rótulo explícito).
+        val labeledPlace = Regex("(?<![a-z])(?:unidade|local de atendimento|local|estabelecimento|instituicao|servico)\\s*:\\s*")
+        for (i in head.indices) {
+            val m = labeledPlace.find(head[i]) ?: continue
+            val v = raw[i].substring(m.range.last + 1).split(Regex("\\s{2,}|\\||\\t")).first().trim().trim('-', ':', ' ')
+            if (v.count { it.isLetter() } >= 4 && v.length <= 60) return v
         }
         for (i in head.indices) {
             val f = head[i]

@@ -31,8 +31,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         BloodPressureEntity::class,
         RoutineEntryEntity::class,
         RoutineSkipEntity::class,
+        DailyTaskEntity::class,
+        DailyTaskLogEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -56,10 +58,28 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun menstrualCycleDao(): MenstrualCycleDao
     abstract fun bloodPressureDao(): BloodPressureDao
     abstract fun routineDao(): RoutineDao
+    abstract fun dailyTaskDao(): DailyTaskDao
 
     companion object {
         fun create(context: Context): AppDatabase =
-            Room.databaseBuilder(context, AppDatabase::class.java, "evolui.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
+            Room.databaseBuilder(context, AppDatabase::class.java, "evolui.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build()
+
+        /** Versão 6: tarefas diárias de treino (flexões, prancha...) e as séries feitas. */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `daily_task` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, " +
+                        "`unit` TEXT NOT NULL, `target` REAL NOT NULL, `remindersPerDay` INTEGER NOT NULL, `startMinute` INTEGER NOT NULL, " +
+                        "`endMinute` INTEGER NOT NULL, `active` INTEGER NOT NULL)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `daily_task_log` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `taskId` INTEGER NOT NULL, " +
+                        "`epochDay` INTEGER NOT NULL, `amount` REAL NOT NULL, `epochMillis` INTEGER NOT NULL)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_daily_task_log_epochDay` ON `daily_task_log` (`epochDay`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_daily_task_log_taskId` ON `daily_task_log` (`taskId`)")
+            }
+        }
 
         /** Versão 2: jejum, fotos de progresso e treinos importados do Health Connect. */
         val MIGRATION_1_2 = object : Migration(1, 2) {

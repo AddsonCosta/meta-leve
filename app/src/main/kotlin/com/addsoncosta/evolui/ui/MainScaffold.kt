@@ -15,7 +15,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -37,6 +37,7 @@ import com.addsoncosta.evolui.ui.settings.SettingsScreen
 import com.addsoncosta.evolui.ui.theme.Section
 import com.addsoncosta.evolui.ui.theme.ThemeBackdrop
 import com.addsoncosta.evolui.ui.today.TodayScreen
+import com.addsoncosta.evolui.update.UpdatePromptOnOpen
 
 private enum class Tab(val route: String, val label: String, val icon: ImageVector) {
     TODAY("hoje", "Hoje", Icons.Filled.Today),
@@ -79,6 +80,8 @@ fun MainScaffold() {
     }
     fun open(route: String) = nav.navigate(route) { launchSingleTop = true }
     val back: () -> Unit = { nav.popBackStack() }
+
+    UpdatePromptOnOpen()
 
     // Fundo do tema (padrão + ilustração da seção) por baixo de todas as telas.
     Box(Modifier.fillMaxSize()) {

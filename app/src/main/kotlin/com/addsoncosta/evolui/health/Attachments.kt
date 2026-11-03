@@ -1,5 +1,6 @@
 package com.addsoncosta.evolui.health
 
+import com.addsoncosta.evolui.i18n.Toasts
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -74,7 +75,7 @@ object Attachments {
         try {
             context.startActivity(Intent.createChooser(intent, "Abrir com").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
         } catch (e: ActivityNotFoundException) {
-            Toast.makeText(context, "Nenhum app para abrir este arquivo", Toast.LENGTH_LONG).show()
+            Toasts.makeText(context, "Nenhum app para abrir este arquivo", Toast.LENGTH_LONG).show()
         }
     }
 
