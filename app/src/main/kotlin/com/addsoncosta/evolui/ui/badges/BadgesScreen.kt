@@ -27,7 +27,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -83,7 +83,7 @@ fun BadgesScreen(onBack: () -> Unit) {
     }.sortedByDescending { if (it.earned != null) 2f else it.fraction }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(150.dp),
+        columns = GridCells.Adaptive(132.dp),
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -157,8 +157,8 @@ private fun BadgeTile(st: BadgeStatus, onClick: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            // A medalha já mostra o cadeado quando está bloqueada.
-            BadgeIcon(st.badge, earned, size = 92)
+            // Bloqueada, a medalha aparece em cinza. Tamanho aprovado na prévia (15% menor que a primeira).
+            BadgeIcon(st.badge, earned, size = 72)
             Text(
                 st.badge.name,
                 fontWeight = FontWeight.Bold,

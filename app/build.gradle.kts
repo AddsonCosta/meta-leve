@@ -16,8 +16,8 @@ android {
         applicationId = "com.evolui.myapp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.5.0"
+        versionCode = 1
+        versionName = "1.0.0"
     }
 
     // Assinatura de release opcional, lida de variáveis de ambiente (CI).

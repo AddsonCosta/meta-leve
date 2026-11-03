@@ -142,6 +142,7 @@ internal fun drawPattern(c: Canvas, w: Float, h: Float, p: Palette, u: Float) {
     when (p.style) {
         BackdropStyle.PLAIN -> Unit
         BackdropStyle.GLASS -> glass(c, w, h, p)
+        BackdropStyle.EVOLUI -> evoluiGlass(c, w, h, p)
         BackdropStyle.SPORT -> sport(c, w, h, p, u, rnd)
         BackdropStyle.CLEAN -> clean(c, w, h, p, u)
         BackdropStyle.TOPO -> topo(c, w, h, p, u, rnd)
@@ -159,6 +160,35 @@ internal fun drawPattern(c: Canvas, w: Float, h: Float, p: Palette, u: Float) {
         BackdropStyle.GREEK -> greek(c, w, h, p, u)
         BackdropStyle.MARBLE -> marble(c, w, h, p, u, rnd)
     }
+}
+
+/**
+ * Tema padrão do Evolui, no estilo dos apps de saúde da Samsung: fundo escuro em degradê do azul do ícone
+ * e brilhos nas cores do ícone, que aparecem através dos cartões de vidro.
+ */
+private fun evoluiGlass(c: Canvas, w: Float, h: Float, p: Palette) {
+    val blue = Color(0xFF1F5FC4)
+    val teal = Color(0xFF1FB5A8)
+    val g = Paint()
+    g.shader = LinearGradient(
+        0f, 0f, w * 0.4f, h,
+        intArrayOf(lerp(p.background, blue, 0.30f).toArgb(), p.background.toArgb(), lerp(p.background, teal, 0.18f).toArgb()),
+        floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP,
+    )
+    c.drawRect(0f, 0f, w, h, g)
+    val m = max(w, h)
+    c.orb(w * 0.92f, h * 0.06f, m * 0.46f, blue, 0.45f)
+    c.orb(w * 0.02f, h * 0.36f, m * 0.40f, teal, 0.28f)
+    c.orb(w * 0.98f, h * 0.62f, m * 0.30f, p.accent4, 0.20f)
+    c.orb(w * 0.12f, h * 0.92f, m * 0.34f, p.accent, 0.16f)
+    c.orb(w * 0.70f, h * 1.02f, m * 0.22f, p.accent3, 0.12f)
+    val sheen = Paint()
+    sheen.shader = LinearGradient(
+        0f, h * 0.10f, w, h * 0.40f,
+        intArrayOf(Color.White.argb(0f), Color.White.argb(0.06f), Color.White.argb(0f)),
+        floatArrayOf(0.3f, 0.5f, 0.7f), Shader.TileMode.CLAMP,
+    )
+    c.drawRect(0f, 0f, w, h, sheen)
 }
 
 /** Vidro fosco: degradê e bolas de cor bem suaves, que aparecem através dos cartões translúcidos. */

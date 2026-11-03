@@ -32,7 +32,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -56,7 +56,9 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.addsoncosta.evolui.core.ActivityLevel
 import com.addsoncosta.evolui.data.MealEntity
 import com.addsoncosta.evolui.data.MealType
+import com.addsoncosta.evolui.data.WorkoutEntity
 import com.addsoncosta.evolui.ui.food.WaterCard
+import com.addsoncosta.evolui.ui.exercise.TodayTasks
 import com.addsoncosta.evolui.ui.health.UpcomingEventsCard
 import com.addsoncosta.evolui.ui.score.HealthScoreCard
 import com.addsoncosta.evolui.ui.appContainer
@@ -97,6 +99,8 @@ fun TodayScreen(
     var editActivity by rememberSaveable { mutableStateOf(false) }
     var editNote by rememberSaveable { mutableStateOf(false) }
     var sharing by rememberSaveable { mutableStateOf(false) }
+    var editingMeal by remember { mutableStateOf<MealEntity?>(null) }
+    var editingWorkout by remember { mutableStateOf<WorkoutEntity?>(null) }
     val isToday = s.date == LocalDate.now()
 
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -113,16 +117,12 @@ fun TodayScreen(
                 IconButton(onClick = onOpenSettings) { Icon(Icons.Filled.Settings, "Configurações") }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { vm.shiftDay(-1) }) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null)
-                    Text("Dia anterior")
+                IconButton(onClick = { vm.shiftDay(-1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Dia anterior") }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    DayButton(s.date) { vm.setDay(it) }
                 }
-                Box(Modifier.weight(1f))
-                if (!isToday) {
-                    TextButton(onClick = { vm.shiftDay(1) }) {
-                        Text("Próximo dia")
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
-                    }
+                IconButton(onClick = { vm.shiftDay(1) }, enabled = !isToday) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Próximo dia")
                 }
             }
         }
@@ -145,7 +145,7 @@ fun TodayScreen(
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     Stat(s.summary.intakeGoal.fmt(), "Meta", color = Evolui.Neon)
-                    Stat(s.summary.eaten.fmt(), "Comido")
+                    Stat(s.summary.eaten.fmt(), "Consumido")
                     Stat(s.workoutKcal.fmt(), "Treino", color = Evolui.Orange)
                     if (s.routineKcal > 0) Stat(s.routineKcal.fmt(), "Rotina", color = Evolui.Orange)
                 }
@@ -245,7 +245,7 @@ fun TodayScreen(
                     val meals = s.meals.filter { it.mealType == type.name }
                     if (meals.isNotEmpty()) {
                         Text(type.label, style = MaterialTheme.typography.labelLarge, color = Evolui.Neon)
-                        meals.forEach { meal -> EntryRow(meal.name, mealAmount(meal), meal.kcal) { vm.deleteMeal(meal) } }
+                        meals.forEach { meal -> EntryRow(meal.name, mealAmount(meal), meal.kcal, onClick = { editingMeal = meal }) { vm.deleteMeal(meal) } }
                     }
                 }
             }
@@ -257,10 +257,16 @@ fun TodayScreen(
                 SectionHeader("Exercícios", "${s.workoutKcal.fmt()} kcal", onAddExercise)
                 if (s.workouts.isEmpty()) Text("Nenhum exercício hoje.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 s.workouts.forEach { w ->
-                    EntryRow(w.name, "${w.minutes.fmt()} min" + if (w.externalId != null) " · " + sourceLabel(w.source) else "", w.kcal, Evolui.Orange) { vm.deleteWorkout(w) }
+                    EntryRow(
+                        w.name, "${w.minutes.fmt()} min" + if (w.externalId != null) " · " + sourceLabel(w.source) else "", w.kcal, Evolui.Orange,
+                        onClick = if (w.externalId == null) ({ editingWorkout = w }) else null,
+                    ) { vm.deleteWorkout(w) }
                 }
             }
         }
+
+        // Tarefas diárias de treino (Treino › Tarefas do dia).
+        item(key = "tarefas") { TodayTasks(s.date) }
 
         // Rotina do dia a dia (montada em Treino › Minha rotina).
         if (s.hasRoutine) {
@@ -319,6 +325,13 @@ fun TodayScreen(
     }
 
     if (sharing) ShareSheet(onDismiss = { sharing = false }, initialPeriod = SharePeriod.Today)
+
+    editingMeal?.let { meal ->
+        EditMealDialog(meal, onDismiss = { editingMeal = null }) { grams, type, date -> vm.editMeal(meal, grams, type, date) }
+    }
+    editingWorkout?.let { w ->
+        EditWorkoutDialog(w, onDismiss = { editingWorkout = null }) { minutes, date -> vm.editWorkout(w, minutes, date) }
+    }
 
     if (editWeight) {
         var text by remember { mutableStateOf(s.weightKg.fmt(1)) }
@@ -429,8 +442,15 @@ private fun SectionHeader(title: String, total: String, onAdd: () -> Unit) {
 }
 
 @Composable
-private fun EntryRow(title: String, detail: String, kcal: Double, color: Color = MaterialTheme.colorScheme.onSurface, onDelete: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+private fun EntryRow(
+    title: String,
+    detail: String,
+    kcal: Double,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+    onClick: (() -> Unit)? = null,
+    onDelete: () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, maxLines = 2)
             Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

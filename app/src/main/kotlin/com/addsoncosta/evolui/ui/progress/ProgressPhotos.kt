@@ -15,7 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
@@ -36,7 +36,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
-private val CaptionDate: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy", PtBr)
+private val CaptionDate: DateTimeFormatter get() = DateTimeFormatter.ofPattern("d MMM yyyy", PtBr)
 
 /** Legenda automática: "14 out 2026 · 98,8 kg". */
 internal fun defaultCaption(date: LocalDate, weightKg: Double?): String =

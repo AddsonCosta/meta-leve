@@ -1,5 +1,6 @@
 package com.addsoncosta.evolui.ui.health
 
+import com.addsoncosta.evolui.i18n.Toasts
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,7 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -160,12 +161,12 @@ fun rememberHealthImporter(
             try {
                 val pending = Attachments.copyIn(context, uri)
                 if (pending == null) {
-                    Toast.makeText(context, "Não foi possível abrir este arquivo.", Toast.LENGTH_LONG).show()
+                    Toasts.makeText(context, "Não foi possível abrir este arquivo.", Toast.LENGTH_LONG).show()
                     return@launch
                 }
                 val text = Ocr.read(context, Attachments.file(context, pending.fileName), pending.mimeType)
                 if (text == null) {
-                    Toast.makeText(
+                    Toasts.makeText(
                         context,
                         "Arquivo guardado. Não deu para ler o texto dele neste celular; preencha os dados à mão, sem problema.",
                         Toast.LENGTH_LONG,

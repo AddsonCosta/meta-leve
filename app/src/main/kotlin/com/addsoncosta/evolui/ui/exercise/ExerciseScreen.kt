@@ -1,5 +1,6 @@
 package com.addsoncosta.evolui.ui.exercise
 
+import com.addsoncosta.evolui.i18n.Toasts
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
@@ -20,6 +21,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EventRepeat
@@ -40,7 +42,7 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -81,7 +83,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 
-private enum class ExerciseTab { REGISTER, ROUTINE, HISTORY }
+private enum class ExerciseTab { REGISTER, TASKS, ROUTINE, HISTORY }
 
 /** Seção Treino: registrar exercícios (com busca) e ver o histórico de atividades. */
 @Composable
@@ -104,6 +106,12 @@ fun ExerciseScreen() {
                     leadingIcon = { Icon(Icons.Filled.Add, null) },
                 )
                 FilterChip(
+                    selected = tab == ExerciseTab.TASKS,
+                    onClick = { tab = ExerciseTab.TASKS },
+                    label = { Text("Tarefas do dia") },
+                    leadingIcon = { Icon(Icons.Filled.Checklist, null) },
+                )
+                FilterChip(
                     selected = tab == ExerciseTab.ROUTINE,
                     onClick = { tab = ExerciseTab.ROUTINE },
                     label = { Text("Minha rotina") },
@@ -119,6 +127,7 @@ fun ExerciseScreen() {
         }
         when (tab) {
             ExerciseTab.REGISTER -> RegisterTab(vm, Modifier.weight(1f))
+            ExerciseTab.TASKS -> TasksTab(Modifier.weight(1f))
             ExerciseTab.ROUTINE -> RoutineTab(vm, Modifier.weight(1f))
             ExerciseTab.HISTORY -> HistoryTab(vm, Modifier.weight(1f))
         }
@@ -270,7 +279,7 @@ private fun RegisterTab(vm: ExerciseViewModel, modifier: Modifier) {
             onDismiss = { selected = null },
             onLog = { minutes, start ->
                 vm.log(ex, minutes, start)
-                Toast.makeText(context, "${ex.name}: ${minutes.fmt()} min registrados", Toast.LENGTH_SHORT).show()
+                Toasts.makeText(context, "${ex.name}: ${minutes.fmt()} min registrados", Toast.LENGTH_SHORT).show()
                 selected = null
             },
             onDelete = if (ex.custom) {

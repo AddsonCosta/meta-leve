@@ -26,3 +26,10 @@ distribuído sob a licença MIT:
 ## Exercícios
 Os valores MET em `app/src/main/assets/exercises.json` seguem o Compendium of Physical Activities
 (Ainsworth et al., 2011).
+
+## Fontes das medalhas
+Os símbolos das medalhas usam recortes (só os símbolos usados) de três fontes:
+- Material Symbols Rounded, do Google (https://github.com/google/material-design-icons), sob a Apache License 2.0;
+- Noto Sans Symbols 2 e Noto Sans Math, do projeto Noto (https://github.com/notofonts), sob a SIL Open Font License 1.1.
+
+Arquivos: `app/src/main/res/font/badge_*.ttf`.

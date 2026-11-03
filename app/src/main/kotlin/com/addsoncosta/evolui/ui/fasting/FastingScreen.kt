@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -23,7 +24,8 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedButton
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -78,6 +80,8 @@ fun FastingScreen() {
     var confirmStop by remember { mutableStateOf(false) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var phaseInfo by remember { mutableStateOf<FastPhase?>(null) }
+    var logging by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<FastEntity?>(null) }
 
     LaunchedEffect(running?.id) {
         while (running != null) {
@@ -165,6 +169,9 @@ fun FastingScreen() {
                         },
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                     ) { Text("Começar jejum agora", fontWeight = FontWeight.Bold) }
+                    OutlinedButton(onClick = { logging = true }, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                        Text("Registrar jejum já feito")
+                    }
                 }
             }
         }
@@ -196,7 +203,7 @@ fun FastingScreen() {
                 }
             }
             item { Overline("Histórico") }
-            items(done, key = { it.id }) { f -> FastRow(f, onDelete = { scope.launch { repo.deleteFast(f) } }) }
+            items(done, key = { it.id }) { f -> FastRow(f, onEdit = { editing = f }, onDelete = { scope.launch { repo.deleteFast(f) } }) }
         }
         item {
             Text(
@@ -209,6 +216,17 @@ fun FastingScreen() {
     }
 
     phaseInfo?.let { PhaseDialog(it, onDismiss = { phaseInfo = null }) }
+
+    if (logging || editing != null) {
+        FastLogDialog(
+            existing = editing,
+            onDismiss = {
+                logging = false
+                editing = null
+            },
+            onSave = { f -> scope.launch { repo.saveFast(f) } },
+        )
+    }
 
     if (confirmStop && running != null) {
         AlertDialog(
@@ -227,7 +245,7 @@ fun FastingScreen() {
 }
 
 @Composable
-private fun FastRow(fast: FastEntity, onDelete: () -> Unit) {
+private fun FastRow(fast: FastEntity, onEdit: () -> Unit, onDelete: () -> Unit) {
     val duration = fast.endMillis!! - fast.startMillis
     val ok = duration >= fast.targetHours * HOUR
     val start = Instant.ofEpochMilli(fast.startMillis).atZone(ZoneId.systemDefault())
@@ -240,6 +258,7 @@ private fun FastRow(fast: FastEntity, onDelete: () -> Unit) {
                 Text("${reached.emoji} Chegou a: ${reached.title}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(clock(duration), style = MaterialTheme.typography.titleMedium, color = if (ok) Evolui.Neon else Evolui.Orange)
+            IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, "Corrigir") }
             IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, "Apagar") }
         }
     }

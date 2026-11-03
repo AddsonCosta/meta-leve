@@ -5,7 +5,11 @@ import com.addsoncosta.evolui.backup.BackupManager
 import com.addsoncosta.evolui.data.AppDatabase
 import com.addsoncosta.evolui.data.AppSettings
 import com.addsoncosta.evolui.data.Repository
+import com.addsoncosta.evolui.habits.HabitReminders
+import com.addsoncosta.evolui.i18n.I18n
+import com.addsoncosta.evolui.update.UpdateChecker
 import com.addsoncosta.evolui.health.HealthSync
+import com.addsoncosta.evolui.ui.badges.BadgeGlyphs
 import com.addsoncosta.evolui.ui.theme.Evolui
 import com.addsoncosta.evolui.ui.theme.Palettes
 import java.time.LocalDate
@@ -20,10 +24,14 @@ class EvoluiApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        I18n.init(this)
         container = AppContainer(this)
         Evolui.palette = Palettes.byKey(container.settings.theme.value)
+        BadgeGlyphs.init(this)
         container.scope.launch { container.repository.seedIfNeeded() }
         runCatching { container.backup.ensureScheduled() }
+        container.scope.launch { runCatching { HabitReminders.rescheduleAll(this@EvoluiApp) } }
+        runCatching { UpdateChecker.ensureScheduled(this) }
     }
 }
 

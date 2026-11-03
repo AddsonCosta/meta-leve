@@ -130,17 +130,17 @@ suspend fun computeHealthScore(db: AppDatabase, settings: AppSettings, today: Lo
             "Suba na balança uma vez por semana, de manhã, em jejum, e anote o peso.",
         )
 
-        // 6. Jejum: opcional, só para quem usa (algum jejum nos últimos 30 dias).
-        val monthAgo = System.currentTimeMillis() - 30 * 24 * HOUR
-        val usesFasting = fasts.any { it.startMillis >= monthAgo }
+        // 6. Jejum: só soma para quem faz. Sem jejum, esta parte vale zero (não ganha mérito),
+        // e o peso dela não passa para as outras: não fazer jejum nunca melhora a nota.
         val weekFasts = fasts.filter { f ->
             f.endMillis != null && Instant.ofEpochMilli(f.endMillis).atZone(zone).toLocalDate().toEpochDay() in range
         }
         val fastsOk = weekFasts.count { it.endMillis!! - it.startMillis >= it.targetHours * HOUR }
         components += ScoreComponent(
-            "jejum", "Jejum", 5, if (usesFasting) (fastsOk / 2f).coerceAtMost(1f) else null,
-            if (usesFasting) "$fastsOk ${if (fastsOk == 1) "jejum concluído" else "jejuns concluídos"} na semana (2 já valem nota cheia)" else "Você não usa jejum (não conta na nota)",
-            "Se você faz jejum, tente concluir pelo menos 2 na semana dentro da meta escolhida.",
+            "jejum", "Jejum", 5, (fastsOk / 2f).coerceAtMost(1f),
+            if (fastsOk > 0) "$fastsOk ${if (fastsOk == 1) "jejum concluído" else "jejuns concluídos"} na semana (2 já valem nota cheia)"
+            else "Nenhum jejum concluído na semana (esta parte só soma quando você faz jejum)",
+            "Se quiser, faça um jejum dentro da meta escolhida: 2 na semana valem a nota cheia desta parte.",
         )
 
         // 7. Cuidados em dia: consulta e exame nos últimos 12 meses.

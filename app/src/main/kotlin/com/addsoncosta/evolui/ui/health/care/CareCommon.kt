@@ -47,7 +47,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
@@ -81,8 +81,8 @@ import java.time.format.TextStyle
 
 // Peças comuns das telas de cuidado (calendário, anamnese, odontologia e ciclo).
 
-internal val MonthTitleFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM 'de' yyyy", PtBr)
-internal val LongDayFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE, d 'de' MMMM", PtBr)
+internal val MonthTitleFormat: DateTimeFormatter get() = com.addsoncosta.evolui.ui.components.MonthYearFormat
+internal val LongDayFormat: DateTimeFormatter get() = com.addsoncosta.evolui.ui.components.LongDayFormat
 
 /** Tipos que podem ser marcados no calendário (bioimpedância entra como um exame à parte). */
 internal val CalendarTypes: List<HealthType> = HealthType.entries.filter { it != HealthType.ANAMNESE }

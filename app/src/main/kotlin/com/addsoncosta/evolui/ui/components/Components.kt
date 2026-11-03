@@ -1,5 +1,6 @@
 package com.addsoncosta.evolui.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,7 +17,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,15 +31,47 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.addsoncosta.evolui.i18n.AppLanguage
+import com.addsoncosta.evolui.i18n.I18n
+import com.addsoncosta.evolui.ui.theme.Evolui
 import java.text.NumberFormat
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-val PtBr: Locale = Locale.forLanguageTag("pt-BR")
-val DateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy", PtBr)
-val ShortDateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM", PtBr)
-val DayFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE, d 'de' MMM", PtBr)
-val TimeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", PtBr)
+/** Idioma do app (o nome vem de quando só havia português); segue a escolha em Configurações. */
+val PtBr: Locale get() = I18n.locale
+
+/** Formatos de data de cada idioma, criados uma vez. */
+private fun perLanguage(pattern: (AppLanguage) -> String): Map<AppLanguage, DateTimeFormatter> =
+    AppLanguage.entries.associateWith { DateTimeFormatter.ofPattern(pattern(it), it.locale) }
+
+private val dateFormats = perLanguage { "dd/MM/yyyy" }
+private val shortDateFormats = perLanguage { "dd/MM" }
+private val dayFormats = perLanguage {
+    when (it) {
+        AppLanguage.PT, AppLanguage.ES -> "EEE, d 'de' MMM"
+        AppLanguage.EN -> "EEE, MMM d"
+        AppLanguage.DE -> "EEE, d. MMM"
+        AppLanguage.FR, AppLanguage.IT -> "EEE d MMM"
+    }
+}
+private val timeFormats = perLanguage { "HH:mm" }
+private val monthTitleFormats = perLanguage { if (it == AppLanguage.PT || it == AppLanguage.ES) "MMMM 'de' yyyy" else "MMMM yyyy" }
+private val longDayFormats = perLanguage {
+    when (it) {
+        AppLanguage.PT, AppLanguage.ES -> "EEEE, d 'de' MMMM"
+        AppLanguage.EN -> "EEEE, MMMM d"
+        AppLanguage.DE -> "EEEE, d. MMMM"
+        AppLanguage.FR, AppLanguage.IT -> "EEEE d MMMM"
+    }
+}
+
+val DateFormat: DateTimeFormatter get() = dateFormats.getValue(I18n.language)
+val ShortDateFormat: DateTimeFormatter get() = shortDateFormats.getValue(I18n.language)
+val DayFormat: DateTimeFormatter get() = dayFormats.getValue(I18n.language)
+val TimeFormat: DateTimeFormatter get() = timeFormats.getValue(I18n.language)
+val MonthYearFormat: DateTimeFormatter get() = monthTitleFormats.getValue(I18n.language)
+val LongDayFormat: DateTimeFormatter get() = longDayFormats.getValue(I18n.language)
 
 fun Double.fmt(decimals: Int = 0): String = NumberFormat.getNumberInstance(PtBr).apply {
     maximumFractionDigits = decimals
@@ -101,6 +134,8 @@ fun Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> 
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        // Temas de vidro: uma borda clara e fina, como a aresta de um vidro.
+        border = if (Evolui.palette.glass) BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)) else null,
     ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
     }

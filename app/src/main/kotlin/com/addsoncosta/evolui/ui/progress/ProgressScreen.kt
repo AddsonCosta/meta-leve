@@ -1,5 +1,6 @@
 package com.addsoncosta.evolui.ui.progress
 
+import com.addsoncosta.evolui.i18n.Toasts
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -47,7 +48,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -157,7 +158,7 @@ fun ProgressScreen(onBack: () -> Unit) {
                     }
                     is PickTarget.Replace -> photoRepo.replace(target.photo, uri)
                 }
-            }.onFailure { Toast.makeText(context, "Não foi possível abrir a foto", Toast.LENGTH_SHORT).show() }
+            }.onFailure { Toasts.makeText(context, "Não foi possível abrir a foto", Toast.LENGTH_SHORT).show() }
         }
     }
     fun pick(target: PickTarget) {
@@ -277,7 +278,7 @@ fun ProgressScreen(onBack: () -> Unit) {
                                 compareText = pairText(beforeLabel, afterLabel)
                                 shareCompare = list
                             } else {
-                                Toast.makeText(context, "Não foi possível abrir as fotos", Toast.LENGTH_SHORT).show()
+                                Toasts.makeText(context, "Não foi possível abrir as fotos", Toast.LENGTH_SHORT).show()
                             }
                         }
                     }, modifier = Modifier.fillMaxWidth()) {
@@ -461,7 +462,7 @@ fun ProgressScreen(onBack: () -> Unit) {
                             photoRepo.saveFraming(ph.id, f.scale.toDouble(), f.offsetX.toDouble(), f.offsetY.toDouble())
                         } else {
                             runCatching { rotatePhoto(context, photoRepo, ph, degrees, f.scale.toDouble(), f.offsetX.toDouble(), f.offsetY.toDouble()) }
-                                .onFailure { Toast.makeText(context, "Não foi possível girar a foto", Toast.LENGTH_SHORT).show() }
+                                .onFailure { Toasts.makeText(context, "Não foi possível girar a foto", Toast.LENGTH_SHORT).show() }
                         }
                     }
                 },

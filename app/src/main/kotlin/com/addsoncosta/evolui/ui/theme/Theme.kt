@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.sp
 
 /** Padrão decorativo desenhado no fundo das telas (ver [drawThemeBackdrop]). */
 enum class BackdropStyle {
-    PLAIN, GLASS, SPORT, CLEAN, TOPO, GRID, RUGGED, CAMO, NAVAL, AIR, TACTICAL,
+    PLAIN, GLASS, EVOLUI, SPORT, CLEAN, TOPO, GRID, RUGGED, CAMO, NAVAL, AIR, TACTICAL,
     POP, KANDINSKY, ROMANTIC, BAROQUE, ROCOCO, GREEK, MARBLE,
 }
 
@@ -113,6 +113,19 @@ object Palettes {
         accent = Color(0xFF2563EB), accentDim = Color(0xFFC7D7FB), onAccent = Color(0xFFFFFFFF),
         accent2 = Color(0xFF0D9488), accent3 = Color(0xFFEA580C), accent4 = Color(0xFFDB2777),
         danger = Color(0xFFDC2626), text = Color(0xFF0F172A), textMuted = Color(0xFF5B677A),
+    )
+
+    /**
+     * Tema padrão: vidro fosco sobre fundo escuro em degradê, nas cores do ícone do Evolui
+     * (azul #1F5FC4, verde-água #1FB5A8, verde #6CC04A, laranja #F7941D e roxo #9B3FBF).
+     */
+    val EvoluiGlass = Palette(
+        key = "evolui", label = "Evolui (vidro)", dark = true,
+        background = Color(0xFF0A1224), surface = Color(0xFF1C2B4A), surfaceHigh = Color(0xFF26385C), outline = Color(0xFF3A4F7E),
+        accent = Color(0xFF6CC04A), accentDim = Color(0xFF2C5A1E), onAccent = Color(0xFF0A2003),
+        accent2 = Color(0xFF1FB5A8), accent3 = Color(0xFFF7941D), accent4 = Color(0xFFB65AD8),
+        danger = Color(0xFFFF6B6B), text = Color(0xFFF4F7FF), textMuted = Color(0xFFB3BFD9),
+        style = BackdropStyle.EVOLUI, glass = true, group = BASIC,
     )
 
     // Só cores, texturas e estilo: nada de logos, marcas ou brasões.
@@ -262,7 +275,7 @@ object Palettes {
     )
 
     val all = listOf(
-        Sport, Ocean, Sunset, Violet, Rose, Graphite, Light, LightBlue, Glass,
+        EvoluiGlass, Sport, Ocean, Sunset, Violet, Rose, Graphite, Light, LightBlue, Glass,
         Run, HealthBlue, Adventure, Navigator, Rugged,
         Olive, Naval, Air, Tactical,
         Pop, Kandinsky, Romantic,
@@ -272,7 +285,7 @@ object Palettes {
     /** Grupos na ordem em que aparecem na escolha de tema. */
     val groups = listOf(BASIC, SPORT, MILITARY, ART, CLASSIC)
 
-    fun byKey(key: String?): Palette = all.firstOrNull { it.key == key } ?: Sport
+    fun byKey(key: String?): Palette = all.firstOrNull { it.key == key } ?: EvoluiGlass
 }
 
 /**
@@ -280,7 +293,7 @@ object Palettes {
  * segue o tema escolhido. Ler estes valores dentro de uma tela faz ela se redesenhar quando o tema muda.
  */
 object Evolui {
-    var palette by mutableStateOf(Palettes.Sport)
+    var palette by mutableStateOf(Palettes.EvoluiGlass)
 
     val Background get() = palette.background
     val Surface get() = palette.surface

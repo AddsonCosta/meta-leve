@@ -1,5 +1,6 @@
 package com.addsoncosta.evolui.health
 
+import com.addsoncosta.evolui.i18n.tr
 import android.Manifest
 import android.app.AlarmManager
 import android.app.NotificationChannel
@@ -100,8 +101,8 @@ object Reminders {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-        val channel = NotificationChannel(CHANNEL_ID, "Lembretes de saúde", NotificationManager.IMPORTANCE_HIGH).apply {
-            description = "Avisos de consultas, exames, remédios e outros eventos do calendário de saúde."
+        val channel = NotificationChannel(CHANNEL_ID, tr("Lembretes de saúde"), NotificationManager.IMPORTANCE_HIGH).apply {
+            description = tr("Avisos de consultas, exames, remédios e outros eventos do calendário de saúde.")
         }
         manager.createNotificationChannel(channel)
     }
@@ -128,7 +129,7 @@ object Reminders {
         )
         val type = HealthType.entries.firstOrNull { it.name == event.type }
         val title = if (type != null && !event.title.contains(type.singular, ignoreCase = true)) {
-            "${type.singular}: ${event.title}"
+            "${tr(type.singular)}: ${event.title}"
         } else event.title
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -151,12 +152,14 @@ object Reminders {
     private fun whenText(event: HealthEventEntity): String {
         val date = LocalDate.ofEpochDay(event.epochDay)
         val today = LocalDate.now()
-        val day = when (date) {
-            today -> "Hoje"
-            today.plusDays(1) -> "Amanhã"
-            else -> "Dia ${date.format(dateFormat)}"
-        }
-        val time = event.minuteOfDay?.let { " às " + LocalTime.of(it / 60, it % 60).format(timeFormat) } ?: ""
+        val day = tr(
+            when (date) {
+                today -> "Hoje"
+                today.plusDays(1) -> "Amanhã"
+                else -> "Dia ${date.format(dateFormat)}"
+            }
+        )
+        val time = event.minuteOfDay?.let { " " + tr("às") + " " + LocalTime.of(it / 60, it % 60).format(timeFormat) } ?: ""
         val place = event.place?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""
         return day + time + place
     }

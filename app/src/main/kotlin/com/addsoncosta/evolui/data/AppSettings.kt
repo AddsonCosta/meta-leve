@@ -37,10 +37,35 @@ class AppSettings(context: Context) {
         get() = prefs.getBoolean(KEY_WRITE_HC, true)
         set(value) = prefs.edit().putBoolean(KEY_WRITE_HC, value).apply()
 
+    private val _waterReminders = MutableStateFlow(
+        WaterReminderPrefs(
+            on = prefs.getBoolean(KEY_WATER_REM_ON, false),
+            startMinute = prefs.getInt(KEY_WATER_REM_START, 7 * 60),
+            endMinute = prefs.getInt(KEY_WATER_REM_END, 22 * 60),
+        )
+    )
+    /** Lembretes de água: ligados ou não e a faixa de horário do dia. */
+    val waterReminders: StateFlow<WaterReminderPrefs> = _waterReminders.asStateFlow()
+
+    fun setWaterReminders(value: WaterReminderPrefs) {
+        prefs.edit()
+            .putBoolean(KEY_WATER_REM_ON, value.on)
+            .putInt(KEY_WATER_REM_START, value.startMinute)
+            .putInt(KEY_WATER_REM_END, value.endMinute)
+            .apply()
+        _waterReminders.value = value
+    }
+
     private companion object {
         const val KEY_THEME = "tema"
         const val KEY_WATER_GOAL = "meta_agua_ml"
         const val KEY_SEED = "versao_dados"
         const val KEY_WRITE_HC = "gravar_treinos_health"
+        const val KEY_WATER_REM_ON = "lembrete_agua"
+        const val KEY_WATER_REM_START = "lembrete_agua_inicio"
+        const val KEY_WATER_REM_END = "lembrete_agua_fim"
     }
 }
+
+/** Faixa do dia (minutos desde a meia-noite) em que os lembretes de água tocam. */
+data class WaterReminderPrefs(val on: Boolean, val startMinute: Int, val endMinute: Int)

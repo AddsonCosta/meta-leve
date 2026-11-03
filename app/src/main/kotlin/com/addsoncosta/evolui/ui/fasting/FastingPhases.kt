@@ -16,7 +16,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -104,7 +104,7 @@ enum class FastPhase(
 const val FASTING_DISCLAIMER =
     "Valores aproximados; não substitui orientação médica. Gestantes, diabéticos e pessoas com histórico de transtorno alimentar devem falar com o médico."
 
-private val WeekdayTime: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE HH:mm", PtBr)
+private val WeekdayTime: DateTimeFormatter get() = DateTimeFormatter.ofPattern("EEE HH:mm", PtBr)
 
 /** Quando a fase começa no jejum atual: "22:30" (hoje) ou "qua 08:30". */
 private fun startLabel(startMillis: Long, phase: FastPhase): String {

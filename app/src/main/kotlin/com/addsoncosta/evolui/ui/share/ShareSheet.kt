@@ -1,5 +1,6 @@
 package com.addsoncosta.evolui.ui.share
 
+import com.addsoncosta.evolui.i18n.Toasts
 import android.graphics.Bitmap
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -35,7 +36,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Text
+import com.addsoncosta.evolui.ui.i18n.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -102,7 +103,7 @@ fun ShareSheet(
                 extraPhoto = CaptionedPhoto(bmp, "Eu hoje")
                 editing = 0 // já abre o ajuste de enquadramento
             } else {
-                Toast.makeText(context, "Não foi possível abrir a foto", Toast.LENGTH_SHORT).show()
+                Toasts.makeText(context, "Não foi possível abrir a foto", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -218,7 +219,7 @@ fun ShareSheet(
                 enabled = s != null,
                 onClick = {
                     copyText(context, fullText(s!!))
-                    Toast.makeText(context, "Texto copiado", Toast.LENGTH_SHORT).show()
+                    Toasts.makeText(context, "Texto copiado", Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
             ) {

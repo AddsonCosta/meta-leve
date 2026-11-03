@@ -31,8 +31,18 @@ class AiDocumentReader(context: Context) {
                 else "Conecte sua IA em Configurações > Minha IA.",
             )
         )
+        // IA que não enxerga fotos (ex.: DeepSeek): só dá para mandar o texto lido no aparelho.
+        if (!config.provider.vision && ocrText.isNullOrBlank()) {
+            return Result.failure(
+                AiException(
+                    AiErrorKind.MODEL,
+                    "${config.provider.label} não lê fotos. Para isto, conecte Gemini, ChatGPT ou Claude em Configurações > Minha IA.",
+                )
+            )
+        }
+        val sendImages = if (config.provider.vision) images else emptyList()
         return try {
-            val encoded = withContext(Dispatchers.Default) { images.map { AiImages.jpegBase64(it) } }
+            val encoded = withContext(Dispatchers.Default) { sendImages.map { AiImages.jpegBase64(it) } }
             val text = buildString {
                 append(instructions.trim())
                 val ocr = ocrText?.trim().orEmpty()

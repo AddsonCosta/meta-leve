@@ -16,6 +16,10 @@ enum class AiProvider(
     val keyUrl: String?,
     val keyHint: String,
     val steps: List<String>,
+    /** Indicação curta de custo-benefício, mostrada ao escolher a IA. */
+    val costNote: String,
+    /** Se a API aceita fotos. Sem isso, só vai o texto que o celular leu dos documentos. */
+    val vision: Boolean = true,
     /** "a" ou "o", para escrever "na Anthropic", "no Google". */
     private val article: String = "a",
 ) {
@@ -34,6 +38,7 @@ enum class AiProvider(
             "Vá em API Keys e toque em Create Key. Dê um nome, por exemplo \"Evolui\".",
             "Copie a chave (começa com sk-ant-) e cole no campo abaixo.",
         ),
+        costNote = "Custo médio. A melhor leitura de receitas, exames e fotos de pratos.",
     ),
     CHATGPT(
         label = "ChatGPT",
@@ -49,6 +54,7 @@ enum class AiProvider(
             "Vá em API keys e toque em Create new secret key.",
             "Copie a chave (começa com sk-) e cole no campo abaixo. Ela só aparece uma vez.",
         ),
+        costNote = "Custo baixo. Boa leitura de fotos e documentos; bom equilíbrio entre preço e qualidade.",
     ),
     GEMINI(
         label = "Gemini",
@@ -64,6 +70,7 @@ enum class AiProvider(
             "Copie a chave (começa com AIza) e cole no campo abaixo.",
             "O Google tem uma faixa gratuita com limites. Nela, os termos do Google permitem usar o que é enviado para melhorar os produtos deles; com cobrança ativada, não. A assinatura do Gemini (Google One) não inclui chave.",
         ),
+        costNote = "Custo muito baixo e faixa gratuita. O melhor custo-benefício para começar.",
         article = "o",
     ),
     GROK(
@@ -80,6 +87,25 @@ enum class AiProvider(
             "Vá em API Keys e toque em Create API Key.",
             "Copie a chave (começa com xai-) e cole no campo abaixo.",
         ),
+        costNote = "Custo alto. Boa qualidade, mas paga mais caro pelo mesmo resultado.",
+    ),
+    DEEPSEEK(
+        label = "DeepSeek",
+        company = "DeepSeek",
+        protocol = AiProtocol.OPENAI,
+        baseUrl = "https://api.deepseek.com/v1",
+        defaultModel = "deepseek-chat",
+        keyUrl = "https://platform.deepseek.com/api_keys",
+        keyHint = "sk-…",
+        steps = listOf(
+            "Abra platform.deepseek.com e entre (ou crie uma conta).",
+            "Em Top up, adicione créditos.",
+            "Vá em API keys e toque em Create new API key.",
+            "Copie a chave (começa com sk-) e cole no campo abaixo.",
+            "A DeepSeek guarda os dados em servidores na China, segundo a política de privacidade dela.",
+        ),
+        costNote = "O custo mais baixo, mas não enxerga fotos: lê só o texto que o celular tira dos documentos. Não serve para o prato por foto.",
+        vision = false,
     ),
     OPENROUTER(
         label = "OpenRouter",
@@ -96,6 +122,7 @@ enum class AiProvider(
             "Copie a chave (começa com sk-or-) e cole no campo abaixo.",
             "O modelo é escrito como empresa/modelo (ex.: openai/gpt-4o-mini) e precisa aceitar imagens. A foto passa pela OpenRouter e pela empresa do modelo.",
         ),
+        costNote = "O custo depende do modelo escolhido. Prático para testar várias IAs com uma chave só.",
     ),
     CUSTOM(
         label = "Outra",
@@ -110,6 +137,7 @@ enum class AiProvider(
             "Informe o endereço base da API, começando com https:// (ex.: https://exemplo.com/v1).",
             "Crie a chave no site do serviço, cole no campo abaixo e escreva o nome do modelo.",
         ),
+        costNote = "Custo e qualidade dependem do serviço escolhido.
         article = "o",
     );
 
