@@ -137,7 +137,7 @@ enum class AiProvider(
             "Informe o endereço base da API, começando com https:// (ex.: https://exemplo.com/v1).",
             "Crie a chave no site do serviço, cole no campo abaixo e escreva o nome do modelo.",
         ),
-        costNote = "Custo e qualidade dependem do serviço escolhido.
+        costNote = "Custo e qualidade dependem do serviço escolhido.",
         article = "o",
     );
 

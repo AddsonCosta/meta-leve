@@ -66,9 +66,6 @@ interface WorkoutDao {
     @Delete
     suspend fun delete(workout: WorkoutEntity)
 
-    @androidx.room.Update
-    suspend fun update(workout: WorkoutEntity)
-
     @Query("SELECT externalId FROM workout WHERE externalId IS NOT NULL")
     suspend fun externalIds(): List<String>
 
