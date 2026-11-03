@@ -50,6 +50,11 @@ object AiFormPrompt {
             appendLine("As imagens são as páginas do documento; o texto lido no celular (OCR) pode vir junto e pode ter erros.")
             appendLine("Responda SOMENTE com um objeto JSON, sem comentários, com estas chaves:")
             lines.forEach { appendLine("- $it") }
+            if (type == HealthType.CONSULTA) {
+                appendLine("O documento pode ter qualquer formato (prontuário, resumo de atendimento, atestado, receita, pedido de exames ou encaminhamento).")
+                appendLine("Pegue os dados principais: data do atendimento (não a de nascimento), especialista, o que foi receitado, exames e procedimentos pedidos ou feitos, e para quem foi encaminhado.")
+                appendLine("Se não houver título claro, use \"Consulta de\" + a especialidade, ou \"Consulta com\" + o nome do médico.")
+            }
             appendLine("Use texto simples. Deixe de fora (ou use null) a chave que o documento não mostra. Não invente dados.")
         }.trim()
     }
